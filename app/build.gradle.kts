@@ -10,8 +10,8 @@ android {
         applicationId = "cn.xiangyu.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.8.0"
+        versionCode = 25
+        versionName = "1.8.1"
     }
 
     buildTypes {

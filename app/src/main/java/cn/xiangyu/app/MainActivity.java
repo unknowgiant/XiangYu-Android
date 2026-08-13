@@ -250,6 +250,7 @@ public class MainActivity extends Activity {
         private static final float TODAY_WEATHER_GAP_DP = 12f;
         private static final float PHOTO_BOTTOM_SPACE_DP = 32f;
         private static final float DISCOVER_TAB_SHIFT_PX = 10f;
+        private static final int[] DISCOVER_CATEGORY_ORDER = {0, 1, 2, 4, 5, 3};
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
         private final float baseDensity;
@@ -538,14 +539,16 @@ public class MainActivity extends Activity {
                 textCenter(c, "+", dp(22), Color.WHITE, addBounds.centerX(), y + dp(27), false);
             }
             y += dp(58) + DISCOVER_TAB_SHIFT_PX;
-            String[] tabs = {"小吃", "风俗", "景区", "避坑", "酒店", "交通"};
+            String[] tabs = {"小吃", "风俗", "景区", "酒店", "交通", "避坑"};
             float gap = dp(4), l = dp(16), tabW = (w - dp(32) - gap * 5) / 6;
             for (int i = 0; i < tabs.length; i++) {
+                int category = DISCOVER_CATEGORY_ORDER[i];
                 float x = l + i * (tabW + gap);
                 RectF tab = new RectF(x, y, x + tabW, y + dp(36));
                 tabBounds.add(tab);
-                roundRect(c, tab.left, tab.top, tab.right, tab.bottom, dp(4), i == contentTab ? RED : 0xffebe8e0);
-                textCenter(c, tabs[i], dp(10), i == contentTab ? Color.WHITE : MUTED, x + tabW / 2, y + dp(23), i == contentTab);
+                roundRect(c, tab.left, tab.top, tab.right, tab.bottom, dp(4), category == contentTab ? RED : 0xffebe8e0);
+                textCenter(c, tabs[i], dp(10), category == contentTab ? Color.WHITE : MUTED,
+                    x + tabW / 2, y + dp(23), category == contentTab);
             }
             return y + dp(50);
         }
@@ -692,7 +695,7 @@ public class MainActivity extends Activity {
                     }
                     for (int i = 0; i < tabBounds.size(); i++) {
                         if (tabBounds.get(i).contains(x, y)) {
-                            contentTab = i; scrollY = 0; invalidate(); return true;
+                            contentTab = DISCOVER_CATEGORY_ORDER[i]; scrollY = 0; invalidate(); return true;
                         }
                     }
                 }
@@ -779,7 +782,7 @@ public class MainActivity extends Activity {
                 addDetailText(content, "近期公开避坑线索", 15, RED, true);
                 travelTipArea = new LinearLayout(getContext());
                 travelTipArea.setOrientation(LinearLayout.VERTICAL);
-                addDetailText(travelTipArea, "正在查询小红书公开搜索线索…", 13, MUTED, false);
+                addDetailText(travelTipArea, "正在查询小红书、抖音公开搜索线索…", 13, MUTED, false);
                 content.addView(travelTipArea);
             }
             TextView nearby = null;
@@ -866,7 +869,8 @@ public class MainActivity extends Activity {
                     }
                     addDetailText(tipArea, "公开笔记具有时效性和主观性，请结合官方公告、近期评论与现场价格交叉确认。", 12, MUTED, false);
                     addSourceButton(tipArea, "在小红书搜索当地避坑", result.xiaohongshuUrl);
-                    addSourceButton(tipArea, "通过百度检索小红书公开结果", result.baiduUrl);
+                    addSourceButton(tipArea, "在抖音搜索当地避坑", result.douyinUrl);
+                    addSourceButton(tipArea, "通过百度检索公开结果", result.baiduUrl);
                 }));
             }
             if (category == 2) {

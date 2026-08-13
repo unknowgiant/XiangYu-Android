@@ -24,13 +24,15 @@ final class TravelTipService {
         final List<LocalData.Item> tips;
         final List<String> summaries;
         final String xiaohongshuUrl;
+        final String douyinUrl;
         final String baiduUrl;
 
         Result(List<LocalData.Item> tips, List<String> summaries,
-               String xiaohongshuUrl, String baiduUrl) {
+               String xiaohongshuUrl, String douyinUrl, String baiduUrl) {
             this.tips = tips;
             this.summaries = summaries;
             this.xiaohongshuUrl = xiaohongshuUrl;
+            this.douyinUrl = douyinUrl;
             this.baiduUrl = baiduUrl;
         }
     }
@@ -44,6 +46,9 @@ final class TravelTipService {
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern ABSTRACT = Pattern.compile(
         "<(?:div|span)[^>]+class=[\"'][^\"']*(?:c-abstract|content-right)[^\"']*[\"'][^>]*>(.*?)</(?:div|span)>",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern JSON_TITLE = Pattern.compile(
+        "[\"'](?:title|titleContent)[\"']\\s*:\\s*[\"'](.*?)[\"']",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     static void fetch(CityRepository.City city, Callback callback) {
@@ -61,21 +66,25 @@ final class TravelTipService {
             if (cached != null) { callback.onResult(cached); return; }
         }
         EXECUTOR.execute(() -> {
-            String query = "site:xiaohongshu.com " + city + " " + subject;
+            String xhsQuery = "site:xiaohongshu.com " + city + " " + subject + " 踩坑 注意";
+            String douyinQuery = "site:douyin.com " + city + " " + subject + " 踩坑 注意";
             List<String> summaries = new ArrayList<>();
-            try { summaries.addAll(searchBaidu(query)); }
+            try { appendUnique(summaries, searchBaidu(xhsQuery, "小红书"), 4); }
+            catch (Exception ignored) { }
+            try { appendUnique(summaries, searchBaidu(douyinQuery, "抖音"), 6); }
             catch (Exception ignored) { }
             List<LocalData.Item> tips = new ArrayList<>();
             int index = 0;
             for (String summary : summaries) {
                 tips.add(new LocalData.Item(keyPrefix + "-xhs-tip-" + index,
                     shortTitle(summary), summary,
-                    "小红书公开搜索线索 · 近期内容需复核", 0xffa34c3a, "避"));
-                if (++index == 3) break;
+                    sourceOf(summary) + "公开搜索线索 · 发布日期与现状需复核", 0xffa34c3a, "避"));
+                if (++index == 6) break;
             }
             Result result = new Result(tips, summaries,
                 "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " " + subject),
-                "https://www.baidu.com/s?wd=" + encode(query));
+                "https://www.douyin.com/search/" + encode(city + " " + subject) + "?type=general",
+                "https://www.baidu.com/s?wd=" + encode("(" + xhsQuery + ") OR (" + douyinQuery + ")"));
             synchronized (CACHE) {
                 if (CACHE.size() >= 40) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(key, result);
@@ -84,25 +93,44 @@ final class TravelTipService {
         });
     }
 
-    private static List<String> searchBaidu(String query) throws Exception {
+    private static List<String> searchBaidu(String query, String source) throws Exception {
         String html = request("https://www.baidu.com/s?ie=utf-8&wd=" + encode(query));
         Set<String> result = new LinkedHashSet<>();
         Matcher blocks = RESULT_BLOCK.matcher(html);
-        while (blocks.find() && result.size() < 3) {
+        while (blocks.find() && result.size() < 4) {
             String block = blocks.group(1);
             String title = first(TITLE, block);
             String detail = first(ABSTRACT, block);
             String value = clean(title + (detail.isEmpty() ? "" : "：" + detail));
-            if (value.length() >= 12 && containsTipWord(value)) result.add(limit(value, 110));
+            addResult(result, value, source, 120);
         }
-        if (result.isEmpty()) {
+        if (result.size() < 2) {
             Matcher titles = TITLE.matcher(html);
-            while (titles.find() && result.size() < 3) {
-                String value = clean(titles.group(1));
-                if (value.length() >= 8 && containsTipWord(value)) result.add(limit(value, 80));
+            while (titles.find() && result.size() < 4) {
+                addResult(result, clean(titles.group(1)), source, 100);
+            }
+        }
+        if (result.size() < 2) {
+            Matcher jsonTitles = JSON_TITLE.matcher(html);
+            while (jsonTitles.find() && result.size() < 4) {
+                addResult(result, clean(jsonTitles.group(1).replace("\\u003c", "<")
+                    .replace("\\u003e", ">").replace("\\\"", "\"")), source, 100);
             }
         }
         return new ArrayList<>(result);
+    }
+
+    private static void addResult(Set<String> result, String value, String source, int max) {
+        if (value.length() < 8 || !containsTipWord(value)) return;
+        if (value.contains("百度百科") || value.contains("登录") || value.contains("验证码")) return;
+        result.add("【" + source + "】" + limit(value, max));
+    }
+
+    private static void appendUnique(List<String> target, List<String> source, int max) {
+        for (String value : source) {
+            if (!target.contains(value)) target.add(value);
+            if (target.size() >= max) return;
+        }
     }
 
     private static boolean containsTipWord(String value) {
@@ -112,9 +140,15 @@ final class TravelTipService {
     }
 
     private static String shortTitle(String value) {
-        int end = value.indexOf('：');
-        String title = end > 3 ? value.substring(0, end) : value;
+        String clean = value.replaceFirst("^【[^】]+】", "");
+        int end = clean.indexOf('：');
+        String title = end > 3 ? clean.substring(0, end) : clean;
         return limit(title, 18);
+    }
+
+    private static String sourceOf(String value) {
+        if (value.startsWith("【抖音】")) return "抖音";
+        return "小红书";
     }
 
     private static String first(Pattern pattern, String value) {

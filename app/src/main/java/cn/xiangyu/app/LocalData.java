@@ -375,10 +375,11 @@ final class LocalData {
 
     private static List<Item> commonTips(String city) {
         String prefix = city == null ? "trip" : city;
+        String name = city == null ? "当地" : city;
         return Arrays.asList(
-            item(prefix + "-tip-1", "先核实预约与开放", "景区政策会随季节调整，以官方公众号、官网或现场公告为准。", "通用提醒 · 出发前复核", 0xffa34c3a, "约"),
-            item(prefix + "-tip-2", "问清价格与份量", "餐饮、包车、体验项目前先确认总价、计价方式及退款条件。", "消费提醒 · 保留凭证", 0xffa06a39, "价"),
-            item(prefix + "-tip-3", "别低估路程", "行政区范围可能很大，地图距离、山路和高峰拥堵都要留余量。", "交通提醒 · 预留时间", 0xff557181, "行"));
+            item(prefix + "-tip-1", name + "景区预约与入园", "热门景区可能分时预约、限流或临时调整入口，先核对官方公告、实名要求和停止入园时间。", "本地避坑 · 出发前复核", 0xffa34c3a, "约"),
+            item(prefix + "-tip-2", name + "消费与体验项目", "餐饮、旅拍、包车和体验项目前确认含税总价、计价单位、附加项目及退款条件，并保留凭证。", "本地避坑 · 先问总价", 0xffa06a39, "价"),
+            item(prefix + "-tip-3", name + "景点交通与返程", "地市范围可能很大，远郊景点需核对末班车、接驳预约和返程叫车条件，不只看地图直线距离。", "本地避坑 · 预留返程", 0xff557181, "行"));
     }
 
     private static List<Item> commonHotels(String city) {
