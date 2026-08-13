@@ -1,0 +1,28 @@
+# Android Studio and local SDK configuration
+.idea/
+*.iml
+local.properties
+
+# Gradle and Android build outputs
+.gradle/
+.gradle-user/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local Android user data and signing material
+.android-user/
+*.keystore
+*.jks
+*.key
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Packaged artifacts are published through GitHub Releases
+*.apk
+*.aab
+*.zip
