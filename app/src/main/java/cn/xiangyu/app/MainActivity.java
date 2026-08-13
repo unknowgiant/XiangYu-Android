@@ -272,6 +272,7 @@ public class MainActivity extends Activity {
         private boolean photosFailed;
         private int photoRequestGeneration;
         private LocalData.Place place;
+        private CityRepository.City currentCity;
         private String currentCityCode = "";
         private WeatherService.Weather weather = new WeatherService.Weather(24, 28, 20, 1, 62, 2.4, false);
         private String locationLabel = "正在定位";
@@ -314,6 +315,7 @@ public class MainActivity extends Activity {
         }
 
         void setCity(CityRepository.City value, boolean initial) {
+            currentCity = value;
             currentCityCode = value.code;
             place = LocalData.withScenicAreas(LocalData.forCity(value), scenicAreas.forCity(value));
             landmarkPhotos.clear(); photoIndex = 0; photosLoading = true; photosFailed = false;
@@ -530,13 +532,15 @@ public class MainActivity extends Activity {
             c.drawRect(0, y - dp(10), w, y + dp(108), paint);
             text(c, "此地风物", dp(21), INK, dp(18), y + dp(23), true);
             text(c, place.intro, dp(11), MUTED, dp(18), y + dp(43), false);
-            addBounds = new RectF(w - dp(55), y, w - dp(16), y + dp(40));
-            circle(c, addBounds.centerX(), y + dp(20), dp(15), RED);
-            textCenter(c, "+", dp(22), Color.WHITE, addBounds.centerX(), y + dp(27), false);
+            if (contentTab != 5) {
+                addBounds = new RectF(w - dp(55), y, w - dp(16), y + dp(40));
+                circle(c, addBounds.centerX(), y + dp(20), dp(15), RED);
+                textCenter(c, "+", dp(22), Color.WHITE, addBounds.centerX(), y + dp(27), false);
+            }
             y += dp(58) + DISCOVER_TAB_SHIFT_PX;
-            String[] tabs = {"小吃", "风俗", "景区", "避坑", "酒店"};
-            float gap = dp(5), l = dp(16), tabW = (w - dp(32) - gap * 4) / 5;
-            for (int i = 0; i < 5; i++) {
+            String[] tabs = {"小吃", "风俗", "景区", "避坑", "酒店", "交通"};
+            float gap = dp(4), l = dp(16), tabW = (w - dp(32) - gap * 5) / 6;
+            for (int i = 0; i < tabs.length; i++) {
                 float x = l + i * (tabW + gap);
                 RectF tab = new RectF(x, y, x + tabW, y + dp(36));
                 tabBounds.add(tab);
@@ -547,7 +551,9 @@ public class MainActivity extends Activity {
         }
 
         private float drawDiscoverItems(Canvas c, float w, float y) {
-            List<LocalData.Item> items = userContent.apply(currentCityCode, contentTab, LocalData.items(place, contentTab));
+            List<LocalData.Item> items = contentTab == 5
+                ? TransportService.items(((MainActivity) getContext()).cityRepository, currentCity, place.sights)
+                : userContent.apply(currentCityCode, contentTab, LocalData.items(place, contentTab));
             for (LocalData.Item item : items) {
                 y = drawItem(c, w, y, item);
             }
@@ -597,6 +603,7 @@ public class MainActivity extends Activity {
         }
 
         private float drawItem(Canvas c, float w, float y, LocalData.Item item) {
+            boolean transportRow = navTab == 1 && contentTab == 5;
             float l = dp(16), r = w - dp(16), h = dp(106);
             roundRect(c, l, y, r, y + h, dp(6), Color.WHITE);
             roundRect(c, l + dp(10), y + dp(10), l + dp(88), y + h - dp(10), dp(4), item.color);
@@ -610,11 +617,13 @@ public class MainActivity extends Activity {
             text(c, description[1], dp(10), MUTED, textLeft, y + dp(66), false);
             text(c, fitWidth(item.meta, dp(10), r - dp(18) - textLeft), dp(10), item.color, textLeft, y + dp(88), true);
             RectF heart = new RectF(r - dp(43), y + dp(10), r - dp(9), y + dp(44));
-            heartBounds.add(heart);
+            heartBounds.add(transportRow ? new RectF(-1, -1, -1, -1) : heart);
             itemBounds.add(new RectF(l, y, r, y + h));
             visibleItems.add(item);
-            heart(c, heart.centerX(), heart.centerY(), favorites.contains(item.id) ? RED : 0xffa7aaa2, favorites.contains(item.id));
-            if (!userContent.note(item.id).isEmpty()) {
+            if (!transportRow) {
+                heart(c, heart.centerX(), heart.centerY(), favorites.contains(item.id) ? RED : 0xffa7aaa2, favorites.contains(item.id));
+            }
+            if (!transportRow && !userContent.note(item.id).isEmpty()) {
                 textRight(c, "有笔记", dp(9), GREEN, r - dp(12), y + dp(88), true);
             } else if (navTab == 1 && contentTab == 2) {
                 textRight(c, "查看周边", dp(9), GREEN, r - dp(12), y + dp(88), true);
@@ -732,6 +741,10 @@ public class MainActivity extends Activity {
         }
 
         private void showItemDetails(LocalData.Item item, int category) {
+            if (category == 5) {
+                showTransportDetails(item);
+                return;
+            }
             LinearLayout content = new LinearLayout(getContext());
             content.setOrientation(LinearLayout.VERTICAL);
             int pad = (int) dp(22); content.setPadding(pad, dpInt(4), pad, dpInt(12));
@@ -879,6 +892,58 @@ public class MainActivity extends Activity {
             return value.toString();
         }
 
+        private void showTransportDetails(LocalData.Item item) {
+            LinearLayout content = new LinearLayout(getContext());
+            content.setOrientation(LinearLayout.VERTICAL);
+            int pad = dpInt(22); content.setPadding(pad, dpInt(5), pad, dpInt(14));
+            addDetailText(content, item.subtitle, 14, INK, false);
+            addDetailText(content, item.meta, 12, MUTED, false);
+            if (TransportService.isRailItem(item)) {
+                CityRepository.City destination = ((MainActivity) getContext()).cityRepository
+                    .findByCode(TransportService.destinationCode(item));
+                if (destination == null) {
+                    addDetailText(content, "暂时无法识别目的地，请返回后重新选择城市。", 13, RED, false);
+                } else {
+                    TextView schedule = addDetailText(content, "正在通过 12306 查询次日直达车次…", 13, GREEN, false);
+                    LinearLayout actions = new LinearLayout(getContext());
+                    actions.setOrientation(LinearLayout.VERTICAL); content.addView(actions);
+                    CityRepository.City source = currentCity;
+                    TransportService.fetchTrains(source, destination, result -> post(() -> {
+                        StringBuilder value = new StringBuilder("查询日期：").append(result.date)
+                            .append("\n").append(result.fromStation).append(" → ").append(result.toStation).append("\n");
+                        if (!result.fresh) {
+                            value.append("当前未能连接铁路实时查询，请在 12306 中按日期复核。\n");
+                        } else if (result.trains.isEmpty()) {
+                            value.append("次日未查询到直达列车，可在 12306 尝试换乘或更改日期。\n");
+                        } else {
+                            for (TransportService.Train train : result.trains) {
+                                value.append("\n").append(train.code).append("  ")
+                                    .append(train.departure).append(" → ").append(train.arrival)
+                                    .append("  历时 ").append(train.duration);
+                            }
+                        }
+                        value.append("\n\n车次、停运、余票和票价以 12306 下单页面为准。");
+                        schedule.setText(value.toString());
+                        actions.removeAllViews();
+                        addSourceButton(actions, "打开铁路 12306 官方查询", result.officialUrl);
+                        addSourceButton(actions, "在百度地图查看到站位置",
+                            "https://map.baidu.com/search/" + Uri.encode(result.toStation));
+                    }));
+                }
+            } else {
+                String destination = TransportService.scenicName(item);
+                addDetailText(content, "出发站：" + TransportService.mainStation(currentCity), 15, RED, true);
+                addDetailText(content, "地图会按实时路况、运营时段和当前位置给出地铁、公交、步行及接驳方案。远郊景点请同时确认末班车和返程预约。", 13, MUTED, false);
+                addSourceButton(content, "百度地图规划公共交通",
+                    TransportService.baiduTransitUrl(currentCity, destination));
+                addSourceButton(content, "高德地图核对路线",
+                    TransportService.amapTransitUrl(currentCity, destination));
+            }
+            ScrollView scroll = new ScrollView(getContext()); scroll.addView(content);
+            new AlertDialog.Builder(getContext()).setTitle(item.title).setView(scroll)
+                .setPositiveButton("关闭", null).show();
+        }
+
         private void appendNearbySection(StringBuilder value, String title, List<String> online, String[] fallback) {
             value.append("\n【").append(title).append("】\n");
             if (!online.isEmpty()) {
@@ -1015,7 +1080,7 @@ public class MainActivity extends Activity {
         }
 
         private String categoryName(int category) {
-            return new String[]{"小吃", "风俗", "景区", "避坑", "酒店"}[Math.max(0, Math.min(4, category))];
+            return new String[]{"小吃", "风俗", "景区", "避坑", "酒店", "交通"}[Math.max(0, Math.min(5, category))];
         }
 
         private String fit(String s, int n) { return s.length() <= n ? s : s.substring(0, n); }
