@@ -81,7 +81,8 @@ final class KnowledgeService {
     }
 
     private static String categoryWord(int category) {
-        return category == 0 ? " 美食 介绍" : category == 1 ? " 民俗 文化 介绍" : " 平价住宿 体验";
+        return category == 0 ? " 美食 介绍" : category == 1 ? " 民俗 文化 介绍"
+            : category == 2 ? " 景区 历史 看点 游览攻略" : " 平价住宿 体验";
     }
 
     private static String searchUrl(String prefix, String query) {
