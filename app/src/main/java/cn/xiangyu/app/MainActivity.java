@@ -246,6 +246,7 @@ public class MainActivity extends Activity {
         private static final int LINE = 0xffe4e0d7;
         private static final float HEADER_SHIFT_PX = 10f;
         private static final float HEADER_EXTRA_CHARACTERS = 3f;
+        private static final float CONTENT_UP_SHIFT_PX = 30f;
         private static final float WEATHER_HEIGHT_DP = 138f;
         private static final float TODAY_WEATHER_GAP_DP = 12f;
         private static final float PHOTO_BOTTOM_SPACE_DP = 32f;
@@ -369,7 +370,7 @@ public class MainActivity extends Activity {
             if (place == null) return;
             float w = getWidth();
             float bottomBar = dp(72);
-            float headerTop = dp(20 + 25 * HEADER_EXTRA_CHARACTERS) + HEADER_SHIFT_PX;
+            float headerTop = dp(20 + 25 * HEADER_EXTRA_CHARACTERS) + HEADER_SHIFT_PX - CONTENT_UP_SHIFT_PX;
             float contentTop = headerTop + dp(60);
             heartBounds.clear();
             itemBounds.clear();
@@ -669,7 +670,7 @@ public class MainActivity extends Activity {
                     scrollY = 0;
                     invalidate(); return true;
                 }
-                float headerTop = dp(20 + 25 * HEADER_EXTRA_CHARACTERS) + HEADER_SHIFT_PX;
+                float headerTop = dp(20 + 25 * HEADER_EXTRA_CHARACTERS) + HEADER_SHIFT_PX - CONTENT_UP_SHIFT_PX;
                 float contentTop = headerTop + dp(60);
                 if (y >= headerTop && y <= headerTop + dp(48) && x > getWidth() - dp(155)) {
                     ((MainActivity) getContext()).chooseCity(); return true;
