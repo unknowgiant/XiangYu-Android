@@ -58,7 +58,6 @@ public class MainActivity extends Activity {
     private XiangYuView content;
     private LocationManager locationManager;
     private CityRepository cityRepository;
-    private ScenicAreaRepository scenicAreaRepository;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -67,8 +66,7 @@ public class MainActivity extends Activity {
         window.setNavigationBarColor(0xfff8f6f1);
         cityRepository = new CityRepository(this);
         LocalData.validateCoverage(cityRepository.all());
-        scenicAreaRepository = new ScenicAreaRepository(this, cityRepository);
-        content = new XiangYuView(this, scenicAreaRepository);
+        content = new XiangYuView(this);
         setContentView(content);
         // Some emulator ROMs expose API 30 but crash inside Window.getInsetsController().
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
@@ -288,11 +286,8 @@ public class MainActivity extends Activity {
         private boolean dragging;
         private float contentHeight;
 
-        private final ScenicAreaRepository scenicAreas;
-
-        XiangYuView(Context context, ScenicAreaRepository scenicAreas) {
+        XiangYuView(Context context) {
             super(context);
-            this.scenicAreas = scenicAreas;
             baseDensity = getResources().getDisplayMetrics().density;
             density = baseDensity;
             prefs = context.getSharedPreferences("favorites", MODE_PRIVATE);
@@ -319,7 +314,7 @@ public class MainActivity extends Activity {
         void setCity(CityRepository.City value, boolean initial) {
             currentCity = value;
             currentCityCode = value.code;
-            place = LocalData.withScenicAreas(LocalData.forCity(value), scenicAreas.forCity(value));
+            place = LocalData.forCity(value);
             landmarkPhotos.clear(); photoIndex = 0; photosLoading = true; photosFailed = false;
             scrollY = 0;
             invalidate();
@@ -769,7 +764,7 @@ public class MainActivity extends Activity {
             if (category == 0 || category == 1 || category == 2 || category == 4) {
                 addDetailText(content, "资料补充", 15, RED, true);
                 knowledge = addDetailText(content, localKnowledgeFallback(item, category)
-                    + "\n\n正在查询百度百科、百度和必应中国资料…", 13, MUTED, false);
+                    + "\n\n正在查询百度百科词条资料…", 13, MUTED, false);
                 sourceActions = new LinearLayout(getContext());
                 sourceActions.setOrientation(LinearLayout.VERTICAL);
                 content.addView(sourceActions, new LinearLayout.LayoutParams(
@@ -788,7 +783,7 @@ public class MainActivity extends Activity {
                 addDetailText(content, "近期公开避坑线索", 15, RED, true);
                 travelTipArea = new LinearLayout(getContext());
                 travelTipArea.setOrientation(LinearLayout.VERTICAL);
-                addDetailText(travelTipArea, "正在查询小红书、抖音公开搜索线索…", 13, MUTED, false);
+                addDetailText(travelTipArea, "正在查询小红书公开页面线索…", 13, MUTED, false);
                 content.addView(travelTipArea);
             }
             TextView nearby = null;
@@ -837,8 +832,6 @@ public class MainActivity extends Activity {
                         : result.introduction + "\n\n来源：" + result.source);
                     actionRow.removeAllViews();
                     addSourceButton(actionRow, "在百度百科中查看", result.baikeUrl);
-                    addSourceButton(actionRow, "在百度中搜索", result.baiduSearchUrl);
-                    addSourceButton(actionRow, "在必应中国中搜索", result.bingChinaUrl);
                 }));
             }
             if (category == 0) {
@@ -848,21 +841,16 @@ public class MainActivity extends Activity {
                     shopArea.removeAllViews();
                     if (result.shops.isEmpty()) {
                         addDetailText(shopArea,
-                            "1. 百度地图当前营业候选\n按“" + cityName + " + " + item.title + "”查询，优先查看距离、近期评价和营业状态。",
-                            13, INK, false);
-                        addDetailText(shopArea,
-                            "2. 高德地图当前营业候选\n用于交叉核对店名、分店地址和到店路线，避免误到停业或异地同名门店。",
+                            "平台公开页面暂未返回可可靠提取的具体店名。请通过下方美团和小红书入口查看当前城市结果，避免把动态页面中的推荐误写成固定榜单。",
                             13, INK, false);
                     } else {
                         int index = 1;
                         for (String shop : result.shops) addDetailText(shopArea,
-                            index++ + ". " + shop + "\n本地实名候选 · 平台结果优先、开放地图补齐 · 到店前核实", 13, INK, false);
+                            index++ + ". " + shop + "\n美团/小红书公开页面候选 · 到店前核实", 13, INK, false);
                     }
                     addDetailText(shopArea, "前五候选按本次公开检索顺序展示，平台热度、评分和营业状态会变化，不构成商业排名。", 12, MUTED, false);
                     addSourceButton(shopArea, "查看美团公开检索结果", result.meituanUrl);
                     addSourceButton(shopArea, "在小红书搜索当地探店", result.xiaohongshuUrl);
-                    addSourceButton(shopArea, "在百度地图查找附近店铺", result.baiduMapUrl);
-                    addSourceButton(shopArea, "在高德地图查找附近店铺", result.amapUrl);
                 }));
             }
             if (category == 4) {
@@ -883,8 +871,6 @@ public class MainActivity extends Activity {
                     }
                     addDetailText(tipArea, "公开笔记具有时效性和主观性，请结合官方公告、近期评论与现场价格交叉确认。", 12, MUTED, false);
                     addSourceButton(tipArea, "在小红书搜索当地避坑", result.xiaohongshuUrl);
-                    addSourceButton(tipArea, "在抖音搜索当地避坑", result.douyinUrl);
-                    addSourceButton(tipArea, "通过百度检索公开结果", result.baiduUrl);
                 }));
             }
             if (category == 2) {
@@ -1013,18 +999,18 @@ public class MainActivity extends Activity {
         private String localKnowledgeFallback(LocalData.Item item, int category) {
             if (category == 0) {
                 return item.title + "可从原料、做法、口感和当地食用场景进一步了解。同名小吃在不同街区或县区可能有不同版本，建议少量品尝并比较本地老店与居民常去的小店。\n\n"
-                    + "网络资料仅作补充，可通过百度百科、百度搜索或必应中国继续查阅。";
+                    + "网络资料仅从百度百科补充；具体店铺通过美团和小红书核对。";
             }
             if (category == 1) {
                 return item.title + "适合结合当地历史、生活环境和传承方式理解。参观、观演或参与节庆时，应先确认开放时间、拍摄规则与礼俗禁忌。\n\n"
-                    + "网络资料仅作补充，可通过百度百科、百度搜索或必应中国继续查阅。";
+                    + "网络资料仅从百度百科补充。";
             }
             if (category == 2) {
                 return item.title + "可从景观类型、历史背景、核心看点、适合人群和建议游览时长进一步了解。亲子场馆注意预约与闭馆日，红色纪念场所注意讲解与团队时段，自然景观重点核对天气、道路、补给和末班交通。\n\n"
                     + "门票、开放时间、预约入口和临时管制以景区官方渠道为准。";
             }
             return item.title + "属于住宿区域或类型参考。实际选择时应比较含税总价、近期住客评价、隔音、卫生、取消政策和到公共交通的真实步行距离。\n\n"
-                + "可通过百度或必应中国了解区域和近期住客信息；价格和营业状态仍以订房平台及酒店确认为准。";
+                + "可通过美团和小红书了解近期住宿体验；价格和营业状态仍以预订页及酒店确认为准。";
         }
 
         private int dpInt(float value) { return Math.round(dp(value)); }

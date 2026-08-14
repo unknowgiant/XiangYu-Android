@@ -215,7 +215,7 @@ final class LocalData {
         String id = city.code;
         return Arrays.asList(
             item(id + "-food-1", profile.food[0], profile.food[0] + "是" + city.name + "较有代表性的地方风味，可从本地老店少量品尝。", "地市代表 · 到店确认价格", 0xffc4633f, "味"),
-            item(id + "-food-2", profile.food[1], profile.food[1] + "在当地常见做法、配料和食用场景各有讲究。", "本地小吃 · 百度/必应可查", 0xffb98942, "食"),
+            item(id + "-food-2", profile.food[1], profile.food[1] + "在当地常见做法、配料和食用场景各有讲究。", "本地小吃 · 百度百科", 0xffb98942, "食"),
             item(id + "-food-3", profile.food[2], "建议比较居民区小店与老字号的不同做法，并留意实际营业时间。", "地方风味 · 少量多尝", 0xffd17a42, "尝"),
             item(id + "-food-4", city.name + "传统早点", "清晨到居民区、菜市场周边寻找日常早餐，比景区套餐更接近本地口味。", "晨间风味 · 留意营业时间", 0xff7c754d, "早"),
             item(id + "-food-5", city.name + "时令家常菜", "优先询问当季食材、份量、做法和时价，选择当地人日常就餐的街区。", "在地餐桌 · 明码问价", 0xffa96545, "鲜"));
@@ -240,7 +240,7 @@ final class LocalData {
                 || title.contains("武术") || title.contains("魔术") || title.contains("杂技")
                 || title.contains("唢呐") || title.contains("铁花") || title.contains("泥泥狗")
                 || title.contains("泥咕咕") || title.contains("木版年画") || title.contains("烙画")) {
-            return "传统技艺 · 百度/必应可查";
+            return "传统技艺 · 百度百科";
         }
         return "地市文化 · 尊重现场礼俗";
     }
@@ -249,7 +249,7 @@ final class LocalData {
         String id = city.code;
         return Arrays.asList(
             item(id + "-food-1", city.name + "特色小吃", "仅检索“" + city.officialName + "”范围内的代表小吃，联网后以本市结果替换。", "地市代码 " + id + " · 联网更新", 0xffc4633f, "味"),
-            item(id + "-food-2", city.name + "传统早点", "按城市全名匹配本地早餐，不再套用同省其他城市内容。", "地市代码 " + id + " · 百度/必应核实", 0xffb98942, "早"),
+            item(id + "-food-2", city.name + "传统早点", "正在按城市全名从百度百科加载具体早餐条目，不套用同省其他城市内容。", "地市代码 " + id + " · 百度百科更新", 0xffb98942, "早"),
             item(id + "-food-3", city.name + "地方菜", "查询本市地方菜、常见做法与食用场景，具体价格和营业状态到店确认。", "地市代码 " + id + " · 城市专属", 0xffd17a42, "菜"),
             item(id + "-food-4", city.name + "时令风味", "询问本市当季食材、份量、做法和时价，确认店铺近期营业状态。", "地市代码 " + id + " · 明码问价", 0xff7c754d, "鲜"),
             item(id + "-food-5", city.name + "老字号与街坊店", "按本市名称核实老字号认定、具体地址和经营主体，避免只依据自媒体榜单。", "地市代码 " + id + " · 多源确认", 0xffa96545, "店"));
@@ -259,7 +259,7 @@ final class LocalData {
         String id = city.code;
         return Arrays.asList(
             item(id + "-culture-1", city.name + "民俗风貌", "仅检索“" + city.officialName + "”民俗资料，联网后以本市公开结果补充。", "地市代码 " + id + " · 联网更新", 0xff537263, "俗"),
-            item(id + "-culture-2", city.name + "非遗项目", "优先核对本市非遗名录、保护单位和传承场所，避免把省域项目直接归入本市。", "地市代码 " + id + " · 百度/必应核实", 0xff8a5f76, "艺"),
+            item(id + "-culture-2", city.name + "非遗项目", "正在从百度百科加载本市具体非遗条目、保护单位和传承信息。", "地市代码 " + id + " · 百度百科更新", 0xff8a5f76, "艺"),
             item(id + "-culture-3", city.name + "节庆活动", "节庆名称与日期需查看本市公告，参与时尊重现场礼俗。", "地市代码 " + id + " · 提前确认", 0xffa45c4f, "节"),
             item(id + "-culture-4", city.name + "传统技艺", "从本市博物馆、非遗馆或正规工坊查证材料、工序和传承信息。", "地市代码 " + id + " · 多源确认", 0xff765b82, "艺"),
             item(id + "-culture-5", city.name + "老城生活", "通过本市地方馆藏、老街和日常社区了解城市沿革，不以商业化打卡内容替代民俗事实。", "地市代码 " + id + " · 文明参观", 0xff657784, "巷"));
@@ -301,12 +301,9 @@ final class LocalData {
     }
 
     static Place withOnline(Place base, DestinationService.Result online) {
-        List<Item> sights = new ArrayList<>(base.sights);
-        for (Item item : online.sights) {
-            boolean duplicate = false;
-            for (Item existing : sights) if (existing.title.equals(item.title)) duplicate = true;
-            if (!duplicate && sights.size() < 18) sights.add(item);
-        }
+        List<Item> sights = new ArrayList<>();
+        for (Item item : online.sights) addUnique(sights, item, 18);
+        for (Item item : base.sights) addUnique(sights, item, 18);
         List<Item> tips = new ArrayList<>(online.tips);
         for (Item item : base.tips) if (tips.size() < 6) tips.add(item);
         List<Item> hotels = new ArrayList<>(online.hotels);
@@ -364,7 +361,7 @@ final class LocalData {
         List<Item> result = new ArrayList<>(curated);
         addUnique(result, item(city.code + "-food-more-1", profile.food1,
             "这类风味通常与当地物产和居民饮食习惯有关，建议从街坊常去的小店少量品尝。",
-            "地域风味 · 百度/必应可查", 0xffc4633f, "味"), 6);
+            "地域风味 · 百度百科", 0xffc4633f, "味"), 6);
         addUnique(result, item(city.code + "-food-more-2", profile.food2,
             "不同街区和县区的做法、调味与配料会有差异，可比较两家以上再判断是否合口味。",
             "地方小吃 · 少量多尝", 0xffb98942, "食"), 6);
@@ -381,7 +378,7 @@ final class LocalData {
             "生活礼俗 · 尊重当地习惯", 0xff537263, "俗"), 6);
         addUnique(result, item(city.code + "-culture-more-2", profile.culture2,
             "可通过地方博物馆、非遗馆或正规演出了解其历史背景、技艺特点与传承现状。",
-            "传统文化 · 百度/必应可查", 0xff8a5f76, "艺"), 6);
+            "传统文化 · 百度百科", 0xff8a5f76, "艺"), 6);
         addUnique(result, item(city.code + "-culture-more-3", "地方节庆与市集",
             "节庆日期和活动范围可能临时调整，参加时遵守现场秩序并尊重居民与仪式空间。",
             "民俗活动 · 提前核实日期", 0xffa45c4f, "节"), 6);

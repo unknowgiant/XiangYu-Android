@@ -24,32 +24,19 @@ final class TravelTipService {
         final List<LocalData.Item> tips;
         final List<String> summaries;
         final String xiaohongshuUrl;
-        final String douyinUrl;
-        final String baiduUrl;
 
-        Result(List<LocalData.Item> tips, List<String> summaries,
-               String xiaohongshuUrl, String douyinUrl, String baiduUrl) {
+        Result(List<LocalData.Item> tips, List<String> summaries, String xiaohongshuUrl) {
             this.tips = tips;
             this.summaries = summaries;
             this.xiaohongshuUrl = xiaohongshuUrl;
-            this.douyinUrl = douyinUrl;
-            this.baiduUrl = baiduUrl;
         }
     }
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Map<String, Result> CACHE = new LinkedHashMap<>();
-    private static final Pattern RESULT_BLOCK = Pattern.compile(
-        "<div[^>]+class=[\"'][^\"']*(?:result|c-container)[^\"']*[\"'][^>]*>(.*?)</div>\\s*</div>",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern TITLE = Pattern.compile("<h3[^>]*>.*?<a[^>]*>(.*?)</a>",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern ABSTRACT = Pattern.compile(
-        "<(?:div|span)[^>]+class=[\"'][^\"']*(?:c-abstract|content-right)[^\"']*[\"'][^>]*>(.*?)</(?:div|span)>",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-    private static final Pattern JSON_TITLE = Pattern.compile(
-        "[\"'](?:title|titleContent)[\"']\\s*:\\s*[\"'](.*?)[\"']",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final Pattern PUBLIC_TITLE = Pattern.compile(
+        "[\\\"'](?:displayTitle|title|desc)[\\\"']\\s*:\\s*[\\\"']([^\\\"']{8,140})[\\\"']",
+        Pattern.CASE_INSENSITIVE);
 
     static void fetch(CityRepository.City city, Callback callback) {
         fetchInternal(city.code, city.name, "旅游 避坑", callback);
@@ -66,25 +53,17 @@ final class TravelTipService {
             if (cached != null) { callback.onResult(cached); return; }
         }
         EXECUTOR.execute(() -> {
-            String xhsQuery = "site:xiaohongshu.com " + city + " " + subject + " 踩坑 注意";
-            String douyinQuery = "site:douyin.com " + city + " " + subject + " 踩坑 注意";
-            List<String> summaries = new ArrayList<>();
-            try { appendUnique(summaries, searchBaidu(xhsQuery, "小红书"), 4); }
-            catch (Exception ignored) { }
-            try { appendUnique(summaries, searchBaidu(douyinQuery, "抖音"), 6); }
-            catch (Exception ignored) { }
+            String xiaohongshuUrl = "https://www.xiaohongshu.com/search_result?keyword="
+                + encode(city + " " + subject + " 踩坑 注意");
+            List<String> summaries = readPublicTitles(xiaohongshuUrl);
             List<LocalData.Item> tips = new ArrayList<>();
-            int index = 0;
-            for (String summary : summaries) {
-                tips.add(new LocalData.Item(keyPrefix + "-xhs-tip-" + index,
+            for (int i = 0; i < summaries.size() && i < 6; i++) {
+                String summary = summaries.get(i);
+                tips.add(new LocalData.Item(keyPrefix + "-xhs-tip-" + i,
                     shortTitle(summary), summary,
-                    sourceOf(summary) + "公开搜索线索 · 发布日期与现状需复核", 0xffa34c3a, "避"));
-                if (++index == 6) break;
+                    "小红书 · 公开页面线索 · 发布日期与现状需复核", 0xffa34c3a, "避"));
             }
-            Result result = new Result(tips, summaries,
-                "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " " + subject),
-                "https://www.douyin.com/search/" + encode(city + " " + subject) + "?type=general",
-                "https://www.baidu.com/s?wd=" + encode("(" + xhsQuery + ") OR (" + douyinQuery + ")"));
+            Result result = new Result(tips, summaries, xiaohongshuUrl);
             synchronized (CACHE) {
                 if (CACHE.size() >= 40) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(key, result);
@@ -93,44 +72,18 @@ final class TravelTipService {
         });
     }
 
-    private static List<String> searchBaidu(String query, String source) throws Exception {
-        String html = request("https://www.baidu.com/s?ie=utf-8&wd=" + encode(query));
+    private static List<String> readPublicTitles(String endpoint) {
         Set<String> result = new LinkedHashSet<>();
-        Matcher blocks = RESULT_BLOCK.matcher(html);
-        while (blocks.find() && result.size() < 4) {
-            String block = blocks.group(1);
-            String title = first(TITLE, block);
-            String detail = first(ABSTRACT, block);
-            String value = clean(title + (detail.isEmpty() ? "" : "：" + detail));
-            addResult(result, value, source, 120);
-        }
-        if (result.size() < 2) {
-            Matcher titles = TITLE.matcher(html);
-            while (titles.find() && result.size() < 4) {
-                addResult(result, clean(titles.group(1)), source, 100);
+        try {
+            Matcher matcher = PUBLIC_TITLE.matcher(request(endpoint));
+            while (matcher.find() && result.size() < 6) {
+                String value = clean(matcher.group(1));
+                if (containsTipWord(value) && !value.contains("登录") && !value.contains("搜索小红书")) {
+                    result.add(limit(value, 140));
+                }
             }
-        }
-        if (result.size() < 2) {
-            Matcher jsonTitles = JSON_TITLE.matcher(html);
-            while (jsonTitles.find() && result.size() < 4) {
-                addResult(result, clean(jsonTitles.group(1).replace("\\u003c", "<")
-                    .replace("\\u003e", ">").replace("\\\"", "\"")), source, 100);
-            }
-        }
+        } catch (Exception ignored) { }
         return new ArrayList<>(result);
-    }
-
-    private static void addResult(Set<String> result, String value, String source, int max) {
-        if (value.length() < 8 || !containsTipWord(value)) return;
-        if (value.contains("百度百科") || value.contains("登录") || value.contains("验证码")) return;
-        result.add("【" + source + "】" + limit(value, max));
-    }
-
-    private static void appendUnique(List<String> target, List<String> source, int max) {
-        for (String value : source) {
-            if (!target.contains(value)) target.add(value);
-            if (target.size() >= max) return;
-        }
     }
 
     private static boolean containsTipWord(String value) {
@@ -140,43 +93,32 @@ final class TravelTipService {
     }
 
     private static String shortTitle(String value) {
-        String clean = value.replaceFirst("^【[^】]+】", "");
-        int end = clean.indexOf('：');
-        String title = end > 3 ? clean.substring(0, end) : clean;
-        return limit(title, 18);
-    }
-
-    private static String sourceOf(String value) {
-        if (value.startsWith("【抖音】")) return "抖音";
-        return "小红书";
-    }
-
-    private static String first(Pattern pattern, String value) {
-        Matcher matcher = pattern.matcher(value);
-        return matcher.find() ? matcher.group(1) : "";
+        int end = value.indexOf('：');
+        return limit(end > 3 ? value.substring(0, end) : value, 18);
     }
 
     private static String request(String endpoint) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
-        connection.setConnectTimeout(4000); connection.setReadTimeout(6000);
+        connection.setConnectTimeout(4500);
+        connection.setReadTimeout(7000);
         connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132 Safari/537.36");
+        connection.setRequestProperty("User-Agent",
+            "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/132 Mobile Safari/537.36");
         StringBuilder body = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                 connection.getInputStream(), StandardCharsets.UTF_8))) {
-            String line; int total = 0;
-            while ((line = reader.readLine()) != null && total < 3_200_000) {
-                body.append(line); total += line.length();
-            }
-        } finally { connection.disconnect(); }
+            String line;
+            while ((line = reader.readLine()) != null && body.length() < 3_000_000) body.append(line);
+        } finally {
+            connection.disconnect();
+        }
         return body.toString();
     }
 
     private static String clean(String value) {
-        return value.replaceAll("<script.*?</script>", " ").replaceAll("<style.*?</style>", " ")
-            .replaceAll("<[^>]+>", " ").replace("&quot;", "\"").replace("&amp;", "&")
-            .replace("&#39;", "'").replace("&nbsp;", " ")
-            .replaceAll("&#x?[0-9a-fA-F]+;", " ").replaceAll("\\s+", " ").trim();
+        return value.replace("\\\"", "\"").replaceAll("<[^>]+>", " ")
+            .replace("&quot;", "\"").replace("&amp;", "&").replace("&#39;", "'")
+            .replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
     }
 
     private static String limit(String value, int max) {
