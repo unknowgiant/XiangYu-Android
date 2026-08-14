@@ -335,6 +335,11 @@ public class MainActivity extends Activity {
                 place = LocalData.withOnline(place, result);
                 if (!result.sights.isEmpty()) refreshLandmarkPhotos(value, place.sights);
                 invalidate();
+                HotelRankService.fetch(value, ranked -> post(() -> {
+                    if (!currentCityCode.equals(value.code)) return;
+                    place = LocalData.withRankedHotels(place, value, ranked.hotels);
+                    invalidate();
+                }));
             }));
             CityContentService.fetch(getContext(), value, result -> post(() -> {
                 if (!currentCityCode.equals(value.code)) return;
@@ -761,7 +766,7 @@ public class MainActivity extends Activity {
             addDetailText(content, item.meta, 12, MUTED, false);
             TextView knowledge = null;
             LinearLayout sourceActions = null;
-            if (category == 0 || category == 1 || category == 4) {
+            if (category == 0 || category == 1 || category == 2 || category == 4) {
                 addDetailText(content, "资料补充", 15, RED, true);
                 knowledge = addDetailText(content, localKnowledgeFallback(item, category)
                     + "\n\n正在查询百度百科、百度和必应中国资料…", 13, MUTED, false);
@@ -822,7 +827,7 @@ public class MainActivity extends Activity {
                     LinearLayout.LayoutParams.MATCH_PARENT, imageHeight));
                 addDetailText(imageArea, "图片来源：" + photo.source, 11, MUTED, false);
             }));
-            if (category == 0 || category == 1 || category == 4) {
+            if (category == 0 || category == 1 || category == 2 || category == 4) {
                 TextView knowledgeText = knowledge;
                 LinearLayout actionRow = sourceActions;
                 KnowledgeService.fetch(cityName, item, category, result -> post(() -> {
@@ -838,7 +843,7 @@ public class MainActivity extends Activity {
             }
             if (category == 0) {
                 LinearLayout shopArea = foodShops;
-                FoodShopService.fetch(cityName, item.title, result -> post(() -> {
+                FoodShopService.fetch(currentCity, item.title, result -> post(() -> {
                     if (!dialog.isShowing()) return;
                     shopArea.removeAllViews();
                     if (result.shops.isEmpty()) {
@@ -851,11 +856,19 @@ public class MainActivity extends Activity {
                     } else {
                         int index = 1;
                         for (String shop : result.shops) addDetailText(shopArea,
-                            index++ + ". " + shop + "\n网络候选 · 非商业排序 · 到店前核实营业与地址", 13, INK, false);
+                            index++ + ". " + shop + "\n本地实名候选 · 平台结果优先、开放地图补齐 · 到店前核实", 13, INK, false);
                     }
+                    addDetailText(shopArea, "前五候选按本次公开检索顺序展示，平台热度、评分和营业状态会变化，不构成商业排名。", 12, MUTED, false);
+                    addSourceButton(shopArea, "查看美团公开检索结果", result.meituanUrl);
+                    addSourceButton(shopArea, "在小红书搜索当地探店", result.xiaohongshuUrl);
                     addSourceButton(shopArea, "在百度地图查找附近店铺", result.baiduMapUrl);
                     addSourceButton(shopArea, "在高德地图查找附近店铺", result.amapUrl);
                 }));
+            }
+            if (category == 4) {
+                addSourceButton(content, "查看美团住宿公开榜单", HotelRankService.meituanSearchUrl(cityName));
+                addSourceButton(content, "在小红书核对近期住宿体验", HotelRankService.xiaohongshuSearchUrl(cityName));
+                addDetailText(content, "住宿前五候选按本次公开检索顺序展示；房价、评分、空房和榜单位置随日期变化，请在预订页再次确认。", 12, MUTED, false);
             }
             if (category == 3) {
                 LinearLayout tipArea = travelTipArea;
@@ -1005,6 +1018,10 @@ public class MainActivity extends Activity {
             if (category == 1) {
                 return item.title + "适合结合当地历史、生活环境和传承方式理解。参观、观演或参与节庆时，应先确认开放时间、拍摄规则与礼俗禁忌。\n\n"
                     + "网络资料仅作补充，可通过百度百科、百度搜索或必应中国继续查阅。";
+            }
+            if (category == 2) {
+                return item.title + "可从景观类型、历史背景、核心看点、适合人群和建议游览时长进一步了解。亲子场馆注意预约与闭馆日，红色纪念场所注意讲解与团队时段，自然景观重点核对天气、道路、补给和末班交通。\n\n"
+                    + "门票、开放时间、预约入口和临时管制以景区官方渠道为准。";
             }
             return item.title + "属于住宿区域或类型参考。实际选择时应比较含税总价、近期住客评价、隔音、卫生、取消政策和到公共交通的真实步行距离。\n\n"
                 + "可通过百度或必应中国了解区域和近期住客信息；价格和营业状态仍以订房平台及酒店确认为准。";
