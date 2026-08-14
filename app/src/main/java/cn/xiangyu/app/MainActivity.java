@@ -244,12 +244,12 @@ public class MainActivity extends Activity {
         private static final int RED = 0xffc8503a;
         private static final int GREEN = 0xff476b5a;
         private static final int LINE = 0xffe4e0d7;
-        private static final float HEADER_SHIFT_PX = 10f;
-        private static final float HEADER_EXTRA_CHARACTERS = 3f;
-        private static final float CONTENT_UP_SHIFT_PX = 30f;
+        private static final float HEADER_TOP_DP = 48f;
         private static final float WEATHER_HEIGHT_DP = 138f;
-        private static final float TODAY_WEATHER_GAP_DP = 12f;
-        private static final float PHOTO_BOTTOM_SPACE_DP = 32f;
+        private static final float TODAY_WEATHER_GAP_DP = 10f;
+        private static final float TODAY_LANDMARK_GAP_DP = 12f;
+        private static final float PHOTO_BOTTOM_SPACE_DP = 20f;
+        private static final float MIN_PHOTO_HEIGHT_DP = 96f;
         private static final float DISCOVER_TAB_SHIFT_PX = 10f;
         private static final int[] DISCOVER_CATEGORY_ORDER = {0, 1, 2, 4, 5, 3};
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -370,7 +370,7 @@ public class MainActivity extends Activity {
             if (place == null) return;
             float w = getWidth();
             float bottomBar = dp(72);
-            float headerTop = dp(20 + 25 * HEADER_EXTRA_CHARACTERS) + HEADER_SHIFT_PX - CONTENT_UP_SHIFT_PX;
+            float headerTop = dp(HEADER_TOP_DP);
             float contentTop = headerTop + dp(60);
             heartBounds.clear();
             itemBounds.clear();
@@ -392,7 +392,7 @@ public class MainActivity extends Activity {
                 canvas.clipRect(0, contentTop, w, getHeight() - bottomBar);
                 canvas.translate(0, -scrollY);
                 float y = navTab == 0 ? drawToday(canvas, w, contentTop) : drawSaved(canvas, w, contentTop);
-                contentHeight = y + dp(20);
+                contentHeight = y + (navTab == 0 ? 0 : dp(20));
                 canvas.restore();
             }
             drawHeader(canvas, w, headerTop);
@@ -413,7 +413,7 @@ public class MainActivity extends Activity {
         private float drawToday(Canvas c, float w, float y) {
             y = drawWeather(c, w, y);
             y = drawCalendar(c, w, y + dp(TODAY_WEATHER_GAP_DP));
-            y = drawLandmarkPhotos(c, w, y + dp(20));
+            y = drawLandmarkPhotos(c, w, y + dp(TODAY_LANDMARK_GAP_DP));
             return y;
         }
 
@@ -475,7 +475,7 @@ public class MainActivity extends Activity {
             float l = dp(16), r = w - dp(16), top = y + dp(58);
             float desiredHeight = clamp((r - l) * 0.62f, dp(210), dp(360));
             float visibleHeight = getHeight() - dp(72) - top - dp(PHOTO_BOTTOM_SPACE_DP);
-            float h = Math.min(desiredHeight, Math.max(dp(170), visibleHeight));
+            float h = Math.min(desiredHeight, Math.max(dp(MIN_PHOTO_HEIGHT_DP), visibleHeight));
             photoBounds = new RectF(l, top, r, top + h);
             roundRect(c, l, top, r, top + h, dp(6), 0xffe7e5df);
             if (!landmarkPhotos.isEmpty()) {
@@ -670,7 +670,7 @@ public class MainActivity extends Activity {
                     scrollY = 0;
                     invalidate(); return true;
                 }
-                float headerTop = dp(20 + 25 * HEADER_EXTRA_CHARACTERS) + HEADER_SHIFT_PX - CONTENT_UP_SHIFT_PX;
+                float headerTop = dp(HEADER_TOP_DP);
                 float contentTop = headerTop + dp(60);
                 if (y >= headerTop && y <= headerTop + dp(48) && x > getWidth() - dp(155)) {
                     ((MainActivity) getContext()).chooseCity(); return true;
