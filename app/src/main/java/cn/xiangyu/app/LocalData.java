@@ -202,7 +202,10 @@ final class LocalData {
             item(id + "-sight-3", city.name + "博物馆与文化场馆", "通过本市地方馆藏了解城市沿革、物产与民俗，开放时间和预约规则请提前确认。", "地市专属 · 留意闭馆日", 0xff6b647a, "博"),
             item(id + "-sight-4", city.name + "老城与历史街区", "适合步行观察本市传统建筑和日常生活，游览时尊重居民空间。", "地市专属 · 建议步行", 0xff8b694a, "巷"),
             item(id + "-sight-5", city.name + "城市公园与滨水空间", "可作为轻松行程或转场休息点，雨季和高温天气注意开放情况。", "地市专属 · 免费区域优先", 0xff4f7562, "园"),
-            item(id + "-sight-6", city.name + "所辖县区目的地", "地级市范围较大，热门目的地可能离市区数小时车程。", "地市专属 · 先看距离", 0xff8b694a, "路"));
+            item(id + "-sight-6", city.name + "所辖县区目的地", "地级市范围较大，热门目的地可能离市区数小时车程。", "地市专属 · 先看距离", 0xff8b694a, "路"),
+            item(id + "-sight-7", city.name + "亲子科普与遛娃去处", "优先查找科技馆、动物园、自然教育中心和有完善休息设施的公园，核对预约、适龄范围与闭馆日。", "亲子遛娃 · 联网补充具体地点", 0xff4f7562, "亲"),
+            item(id + "-sight-8", city.name + "红色记忆与纪念场馆", "结合本市纪念馆、革命旧址、会址和烈士纪念设施了解地方历史，参观时遵守场馆秩序。", "红色学习 · 联网补充具体地点", 0xffa34c3a, "红"),
+            item(id + "-sight-9", city.name + "小众自然景观", "寻找湿地、森林、峡谷、地质遗迹和自然保护地等低密度去处，提前核实天气、道路、补给和返程。", "纯自然景观 · 联网补充具体地点", 0xff4f7562, "野"));
         return new Place(city.name, city.province, city.lat, city.lon,
             "已覆盖 " + city.officialName + "，在线补充当地景点与出行建议", food, culture, sights,
             commonTips(city.name), commonHotels(city.name));
@@ -302,7 +305,7 @@ final class LocalData {
         for (Item item : online.sights) {
             boolean duplicate = false;
             for (Item existing : sights) if (existing.title.equals(item.title)) duplicate = true;
-            if (!duplicate && sights.size() < 12) sights.add(item);
+            if (!duplicate && sights.size() < 18) sights.add(item);
         }
         List<Item> tips = new ArrayList<>(online.tips);
         for (Item item : base.tips) if (tips.size() < 6) tips.add(item);
@@ -315,9 +318,24 @@ final class LocalData {
     static Place withScenicAreas(Place base, List<Item> scenicAreas) {
         if (scenicAreas.isEmpty()) return base;
         List<Item> sights = new ArrayList<>(scenicAreas);
-        for (Item item : base.sights) addUnique(sights, item, 12);
+        for (Item item : base.sights) addUnique(sights, item, 18);
         return new Place(base.city, base.province, base.lat, base.lon, base.intro,
             base.food, base.culture, sights, base.tips, base.hotels);
+    }
+
+    static Place withRankedHotels(Place base, CityRepository.City city, List<String> rankedNames) {
+        if (rankedNames.isEmpty()) return base;
+        List<Item> hotels = new ArrayList<>();
+        int rank = 1;
+        for (String name : rankedNames) {
+            addUnique(hotels, item(city.code + "-hotel-rank-" + rank, name,
+                "公开平台结果中的本地住宿候选。优先比较含税总价、近期住客评价、卫生、隔音、取消政策和到公共交通的真实步行距离。",
+                "美团/小红书等公开榜单索引 · 当前检索第" + rank + "位", 0xff536f78, "宿"), 5);
+            rank++;
+        }
+        for (Item item : base.hotels) addUnique(hotels, item, 10);
+        return new Place(base.city, base.province, base.lat, base.lon, base.intro,
+            base.food, base.culture, base.sights, base.tips, hotels);
     }
 
     static Place withTravelTips(Place base, List<Item> onlineTips) {
@@ -336,6 +354,9 @@ final class LocalData {
         result.add(item(city.code + "-sight-more-1", city.name + "地方博物馆", "从地方馆藏了解城市历史、物产和民俗，出发前确认预约与闭馆日。", "人文场馆 · 开放时间需复核", 0xff6b647a, "博"));
         result.add(item(city.code + "-sight-more-2", "老城与历史街区", "避开高峰慢行观察建筑与街巷生活，游览时尊重居民空间。", "城市漫游 · 建议步行", 0xff8b694a, "巷"));
         result.add(item(city.code + "-sight-more-3", profile.landscape, "结合天气和交通安排半日或一日行程，山区与远郊需预留返程时间。", "周边景观 · 行前核实", 0xff4f7562, "景"));
+        result.add(item(city.code + "-sight-more-4", city.name + "亲子科普与遛娃去处", "优先查找科技馆、动物园、自然教育中心和休息设施完善的公园，提前确认预约与适龄范围。", "亲子遛娃 · 联网补充具体地点", 0xff4f7562, "亲"));
+        result.add(item(city.code + "-sight-more-5", city.name + "红色记忆与纪念场馆", "结合纪念馆、革命旧址和会址了解地方历史，团队参观前确认讲解和预约时段。", "红色学习 · 联网补充具体地点", 0xffa34c3a, "红"));
+        result.add(item(city.code + "-sight-more-6", city.name + "小众自然景观", "寻找湿地、森林、峡谷、地质遗迹和自然保护地，提前核实天气、道路、补给和返程。", "纯自然景观 · 联网补充具体地点", 0xff4f7562, "野"));
         return result;
     }
 
