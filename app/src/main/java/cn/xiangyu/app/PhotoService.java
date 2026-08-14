@@ -58,7 +58,7 @@ final class PhotoService {
     }
 
     private static String homeCacheKey(CityRepository.City city, List<LocalData.Item> sights) {
-        StringBuilder value = new StringBuilder("home:v2:").append(city.code);
+        StringBuilder value = new StringBuilder("home:v3:").append(city.code);
         int count = 0;
         for (LocalData.Item sight : sights) {
             if (count++ >= 7) break;
@@ -128,10 +128,12 @@ final class PhotoService {
     private static List<Photo> load(CityRepository.City city, List<LocalData.Item> sights, Callback callback) {
         List<Photo> result = new ArrayList<>();
         Set<String> usedUrls = new HashSet<>();
+        Set<Long> usedSignatures = new HashSet<>();
         List<String> landmarkNames = new ArrayList<>();
         for (LocalData.Item sight : sights) {
             if (landmarkNames.size() >= 5) break;
-            if (sight.title.contains("城市风貌") || sight.title.contains("周边县域")) continue;
+            if (isGenericSight(sight.title) || sight.meta.contains("联网补充具体地点")
+                    || sight.meta.contains("周边景观")) continue;
             landmarkNames.add(sight.title);
         }
         result.addAll(loadBingFallback(city, landmarkNames, callback));
@@ -140,7 +142,11 @@ final class PhotoService {
                 if (result.size() >= 5) break;
                 List<Photo> baidu = loadBaiduImages(city.name + " " + landmark + " 景点 实景", landmark, 1);
                 if (!baidu.isEmpty()) {
-                    result.add(baidu.get(0));
+                    Photo candidate = baidu.get(0);
+                    long signature = imageSignature(candidate.bitmap);
+                    if (isNearDuplicate(signature, usedSignatures)) continue;
+                    usedSignatures.add(signature);
+                    result.add(candidate);
                     callback.onResult(new ArrayList<>(result));
                 }
             }
@@ -156,6 +162,9 @@ final class PhotoService {
                     if (url.isEmpty() || !usedUrls.add(url)) continue;
                     Bitmap bitmap = downloadBitmap(url);
                     if (bitmap == null) continue;
+                    long signature = imageSignature(bitmap);
+                    if (isNearDuplicate(signature, usedSignatures)) continue;
+                    usedSignatures.add(signature);
                     result.add(new Photo(bestTitle(page.optString("title", ""), city.name, landmarkNames),
                         "Wikimedia Commons · 备用图片", bitmap));
                     callback.onResult(new ArrayList<>(result));
@@ -168,11 +177,13 @@ final class PhotoService {
     private static List<Photo> loadBingFallback(CityRepository.City city, List<String> landmarks, Callback callback) {
         List<Photo> result = new ArrayList<>();
         Set<String> used = new HashSet<>();
-        List<String> targets = landmarks.isEmpty() ? java.util.Collections.singletonList(city.name + "著名景点") : landmarks;
+        Set<Long> signatures = new HashSet<>();
+        List<String> targets = landmarks.isEmpty()
+            ? java.util.Collections.singletonList(city.name + "代表性景区") : landmarks;
         for (String landmark : targets) {
             if (result.size() >= 5) break;
             try {
-                String query = city.name + " " + landmark + " 实景";
+                String query = city.officialName + " " + landmark + " 景区 官方 实景";
                 String endpoint = "https://cn.bing.com/images/search?q="
                     + URLEncoder.encode(query, StandardCharsets.UTF_8.name()) + "&form=HDRSC2";
                 String html = requestText(endpoint, 4000, 6000);
@@ -184,6 +195,9 @@ final class PhotoService {
                     if (!imageUrl.startsWith("https://") || !used.add(imageUrl)) continue;
                     Bitmap bitmap = downloadBitmap(imageUrl);
                     if (bitmap == null || bitmap.getWidth() < 400 || bitmap.getHeight() < 240) continue;
+                    long signature = imageSignature(bitmap);
+                    if (isNearDuplicate(signature, signatures)) continue;
+                    signatures.add(signature);
                     result.add(new Photo(city.name + " · " + landmark,
                         sourceHost(pageUrl) + " · " + city.name + "检索", bitmap));
                     callback.onResult(new ArrayList<>(result));
@@ -192,6 +206,37 @@ final class PhotoService {
             } catch (Exception ignored) { }
         }
         return result;
+    }
+
+    private static boolean isGenericSight(String title) {
+        String[] generic = {"城市风貌", "自然与郊野景观", "博物馆与文化场馆", "老城与历史街区",
+            "城市公园与滨水空间", "所辖县区目的地", "地方博物馆", "周边县域", "周边景观",
+            "亲子科普与遛娃去处", "红色记忆与纪念场馆", "小众自然景观"};
+        for (String value : generic) if (title.contains(value)) return true;
+        return false;
+    }
+
+    private static long imageSignature(Bitmap bitmap) {
+        Bitmap sample = Bitmap.createScaledBitmap(bitmap, 9, 8, true);
+        long signature = 0L;
+        int bit = 0;
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 8; x++) {
+                int left = sample.getPixel(x, y);
+                int right = sample.getPixel(x + 1, y);
+                int leftLight = ((left >> 16) & 0xff) * 30 + ((left >> 8) & 0xff) * 59 + (left & 0xff) * 11;
+                int rightLight = ((right >> 16) & 0xff) * 30 + ((right >> 8) & 0xff) * 59 + (right & 0xff) * 11;
+                if (leftLight > rightLight) signature |= 1L << bit;
+                bit++;
+            }
+        }
+        if (sample != bitmap) sample.recycle();
+        return signature;
+    }
+
+    private static boolean isNearDuplicate(long candidate, Set<Long> existing) {
+        for (long value : existing) if (Long.bitCount(candidate ^ value) <= 7) return true;
+        return false;
     }
 
     private static List<Photo> loadBaiduImages(String query, String title, int limit) {
