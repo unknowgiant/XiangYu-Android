@@ -117,7 +117,7 @@ final class TransportService {
     static String baiduTransitUrl(CityRepository.City city, String destination) {
         return "https://api.map.baidu.com/direction?origin=" + encode(mainStation(city))
             + "&destination=" + encode(destination) + "&mode=transit&region="
-            + encode(city.name) + "&output=html&src=cn.xiangyu.app";
+            + encode(city.name) + "&output=html&src=cn.xiangyu.travelguide";
     }
 
     static String amapTransitUrl(CityRepository.City city, String destination) {
