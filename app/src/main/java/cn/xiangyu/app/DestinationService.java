@@ -49,7 +49,7 @@ final class DestinationService {
             String cachedOsm = cache.getString(key + "_osm", "");
             String cachedHotels = cache.getString(key + "_hotels", "");
             int cacheVersion = cache.getInt(key + "_version", 1);
-            if ((!cached.isEmpty() || !cachedOsm.isEmpty()) && cacheVersion >= 5
+            if ((!cached.isEmpty() || !cachedOsm.isEmpty()) && cacheVersion >= 6
                     && System.currentTimeMillis() - updatedAt < CACHE_LIFE) {
                 Result wiki = parse(city, cached, false);
                 List<LocalData.Item> osm = parseOsmCache(city, cachedOsm);
@@ -78,7 +78,7 @@ final class DestinationService {
                     Result wiki = parse(city, extract, true);
                     List<LocalData.Item> osmSights = fetchOpenStreetMap(city);
                     List<LocalData.Item> hotels = fetchOpenStreetMapHotels(city);
-                    if (!osmSights.isEmpty()) cache.edit().putString(key + "_osm", serializeOsm(osmSights)).putInt(key + "_version", 5).apply();
+                    if (!osmSights.isEmpty()) cache.edit().putString(key + "_osm", serializeOsm(osmSights)).putInt(key + "_version", 6).apply();
                     if (!hotels.isEmpty()) cache.edit().putString(key + "_hotels", serializeOsm(hotels)).apply();
                     callback.onResult(new Result(osmSights.isEmpty() ? wiki.sights : osmSights, wiki.tips, hotels, true));
                     return;
@@ -86,7 +86,7 @@ final class DestinationService {
                 List<LocalData.Item> osmSights = fetchOpenStreetMap(city);
                 if (!osmSights.isEmpty()) {
                     cache.edit().putString(key + "_osm", serializeOsm(osmSights))
-                        .putInt(key + "_version", 5).putLong(key + "_time", System.currentTimeMillis()).apply();
+                        .putInt(key + "_version", 6).putLong(key + "_time", System.currentTimeMillis()).apply();
                     List<LocalData.Item> hotels = fetchOpenStreetMapHotels(city);
                     if (!hotels.isEmpty()) cache.edit().putString(key + "_hotels", serializeOsm(hotels)).apply();
                     callback.onResult(new Result(osmSights, new ArrayList<>(), hotels, true));
@@ -96,7 +96,7 @@ final class DestinationService {
             List<LocalData.Item> osmSights = fetchOpenStreetMap(city);
             if (!osmSights.isEmpty()) {
                 cache.edit().putString(key + "_osm", serializeOsm(osmSights))
-                    .putInt(key + "_version", 5).putLong(key + "_time", System.currentTimeMillis()).apply();
+                    .putInt(key + "_version", 6).putLong(key + "_time", System.currentTimeMillis()).apply();
                 Result wiki = parse(city, cached, false);
                 List<LocalData.Item> hotels = fetchOpenStreetMapHotels(city);
                 callback.onResult(new Result(osmSights, wiki.tips, hotels, true));
@@ -237,10 +237,13 @@ final class DestinationService {
     private static List<LocalData.Item> fetchOpenStreetMap(CityRepository.City city) {
         List<LocalData.Item> result = new ArrayList<>();
         try {
-            String query = "[out:json][timeout:10];(node(around:18000," + city.lat + "," + city.lon
-                + ")[tourism~\"attraction|museum|viewpoint\"][name];way(around:18000," + city.lat + "," + city.lon
-                + ")[tourism~\"attraction|museum|viewpoint\"][name];node(around:12000," + city.lat + "," + city.lon
-                + ")[leisure=park][name];);out tags center 30;";
+            String around = "(around:28000," + city.lat + "," + city.lon + ")";
+            String query = "[out:json][timeout:14];("
+                + "nwr" + around + "[tourism~\"attraction|museum|viewpoint|zoo|aquarium|theme_park\"][name];"
+                + "nwr" + around + "[leisure~\"park|nature_reserve\"][name];"
+                + "nwr" + around + "[historic~\"memorial|monument|battlefield\"][name];"
+                + "nwr" + around + "[natural~\"peak|waterfall|cave_entrance|cliff\"][name];"
+                + ");out tags center 60;";
             String endpoint = "https://overpass-api.de/api/interpreter?data="
                 + URLEncoder.encode(query, StandardCharsets.UTF_8.name());
             HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
@@ -254,7 +257,7 @@ final class DestinationService {
             }
             JSONArray elements = new JSONObject(body.toString()).optJSONArray("elements");
             if (elements == null) return result;
-            for (int i = 0; i < elements.length() && result.size() < 7; i++) {
+            for (int i = 0; i < elements.length() && result.size() < 12; i++) {
                 JSONObject element = elements.getJSONObject(i);
                 JSONObject tags = element.optJSONObject("tags");
                 if (tags == null) continue;
@@ -263,17 +266,54 @@ final class DestinationService {
                 boolean duplicate = false;
                 for (LocalData.Item item : result) if (item.title.equals(name)) duplicate = true;
                 if (duplicate) continue;
-                String kind = tags.optString("tourism", "park");
-                String label = kind.equals("museum") ? "博物馆" : kind.equals("viewpoint") ? "观景点" : kind.equals("park") ? "公园" : "景点";
+                String label = scenicCategory(tags, name);
                 JSONObject center = element.optJSONObject("center");
                 double lat = element.has("lat") ? element.optDouble("lat") : center == null ? Double.NaN : center.optDouble("lat", Double.NaN);
                 double lon = element.has("lon") ? element.optDouble("lon") : center == null ? Double.NaN : center.optDouble("lon", Double.NaN);
+                String opening = tags.optString("opening_hours", "").trim();
+                String fee = tags.optString("fee", "").trim();
+                StringBuilder detail = new StringBuilder(scenicIntroduction(label));
+                if (!opening.isEmpty()) detail.append(" 开放时间标注：").append(opening).append("。");
+                if (!fee.isEmpty()) detail.append(" 收费标注：").append(fee).append("。");
+                detail.append(" 实际开放、预约、门票和交通请在出发前通过官方渠道复核。");
+                String mark = label.equals("亲子遛娃") ? "亲" : label.equals("红色学习") ? "红"
+                    : label.equals("纯自然景观") ? "野" : "景";
                 result.add(new LocalData.Item(city.code + "-osm-" + element.optLong("id"), name,
-                    "来自开放地图的" + label + "，开放状态、门票和路线请在出发前复核。",
-                    "OpenStreetMap · 附近约18公里", 0xff47748a, "图", lat, lon));
+                    detail.toString(), label + " · OpenStreetMap · 市区约28公里范围", 0xff47748a, mark, lat, lon));
             }
         } catch (Exception ignored) { }
         return result;
+    }
+
+    private static String scenicCategory(JSONObject tags, String name) {
+        String tourism = tags.optString("tourism", "");
+        String historic = tags.optString("historic", "");
+        String natural = tags.optString("natural", "");
+        String leisure = tags.optString("leisure", "");
+        String museum = tags.optString("museum", "");
+        if (name.contains("纪念") || name.contains("革命") || name.contains("烈士")
+                || name.contains("起义") || name.contains("会址") || name.contains("旧址")
+                || historic.equals("memorial") || historic.equals("battlefield")) return "红色学习";
+        if (tourism.equals("zoo") || tourism.equals("aquarium") || tourism.equals("theme_park")
+                || museum.contains("science") || name.contains("科技馆") || name.contains("儿童")
+                || name.contains("动物园") || name.contains("海洋馆")) return "亲子遛娃";
+        if (!natural.isEmpty() || leisure.equals("nature_reserve") || name.contains("森林")
+                || name.contains("湿地") || name.contains("峡谷") || name.contains("瀑布")
+                || name.contains("草原") || name.contains("自然保护")) return "纯自然景观";
+        return "人文与城市漫游";
+    }
+
+    private static String scenicIntroduction(String category) {
+        if (category.equals("亲子遛娃")) {
+            return "适合亲子半日游、自然观察或科普体验，建议重点核对儿童适龄范围、预约场次、休息区和推车通行条件。";
+        }
+        if (category.equals("红色学习")) {
+            return "适合红色研学与城市历史学习，可结合基本陈列、旧址空间和定时讲解理解相关历史背景。";
+        }
+        if (category.equals("纯自然景观")) {
+            return "以山林、湿地、地貌或生态环境为主要看点，适合轻徒步和自然观察，需关注天气、路况、补给与返程时间。";
+        }
+        return "适合了解当地历史、建筑、馆藏或城市公共空间，可安排一至三小时慢游并结合现场讲解。";
     }
 
     private static Result parse(CityRepository.City city, String extract, boolean fresh) {
