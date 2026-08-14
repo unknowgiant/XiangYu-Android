@@ -7,11 +7,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "cn.xiangyu.app"
+        applicationId = "cn.xiangyu.travelguide"
         minSdk = 26
         targetSdk = 35
-        versionCode = 28
-        versionName = "1.8.4"
+        versionCode = 29
+        versionName = "1.8.5"
     }
 
     buildTypes {
