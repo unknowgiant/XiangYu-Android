@@ -1,0 +1,3 @@
+# Copy this setting into the untracked local.properties file for local builds.
+# Create a Web Service key in the Amap Open Platform console. Never commit its value.
+AMAP_WEB_KEY=
