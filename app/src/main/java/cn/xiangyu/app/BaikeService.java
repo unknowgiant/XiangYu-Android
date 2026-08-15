@@ -118,7 +118,7 @@ final class BaikeService {
         connection.setRequestProperty("Accept", "application/json,text/plain,*/*");
         connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9");
         connection.setRequestProperty("User-Agent",
-            "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/132 Mobile Safari/537.36 XiangYu/1.8.7");
+            "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/132 Mobile Safari/537.36 XiangYu/1.9.0");
         StringBuilder body = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(
                 connection.getInputStream(), StandardCharsets.UTF_8))) {

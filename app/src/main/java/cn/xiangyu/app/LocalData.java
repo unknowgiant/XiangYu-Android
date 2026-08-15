@@ -232,14 +232,16 @@ final class LocalData {
         }
     }
 
-    static Place withRankedHotels(Place base, CityRepository.City city, List<String> rankedNames) {
+    static Place withRankedHotels(Place base, CityRepository.City city, List<String> rankedNames,
+                                  java.util.Map<String, String> rankedSources) {
         if (rankedNames.isEmpty()) return base;
         List<Item> hotels = new ArrayList<>();
         int rank = 1;
         for (String name : rankedNames) {
             addUnique(hotels, item(city.code + "-hotel-rank-" + rank, name,
                 "公开平台结果中的本地住宿候选。优先比较含税总价、近期住客评价、卫生、隔音、取消政策和到公共交通的真实步行距离。",
-                "美团/小红书公开榜单索引 · 当前检索第" + rank + "位", 0xff536f78, "宿"), 5);
+                rankedSources.getOrDefault(name, "公开平台") + "公开结果 · 当前检索第" + rank + "位",
+                0xff536f78, "宿"), 5);
             rank++;
         }
         for (Item item : base.hotels) addUnique(hotels, item, 10);
@@ -307,9 +309,12 @@ final class LocalData {
         String prefix = city == null ? "trip" : city;
         String name = city == null ? "当地" : city;
         return Arrays.asList(
-            item(prefix + "-tip-1", name + "景区预约与入园", "热门景区可能分时预约、限流或临时调整入口，先核对官方公告、实名要求和停止入园时间。", "本地避坑 · 出发前复核", 0xffa34c3a, "约"),
-            item(prefix + "-tip-2", name + "消费与体验项目", "餐饮、旅拍、包车和体验项目前确认含税总价、计价单位、附加项目及退款条件，并保留凭证。", "本地避坑 · 先问总价", 0xffa06a39, "价"),
-            item(prefix + "-tip-3", name + "景点交通与返程", "地市范围可能很大，远郊景点需核对末班车、接驳预约和返程叫车条件，不只看地图直线距离。", "本地避坑 · 预留返程", 0xff557181, "行"));
+            item(prefix + "-tip-1", name + "出租车与包车核查", "优先使用正规平台或站点车辆，上车前确认计价方式、路线、过路停车费用；议价包车应写明车型、时长、景点和退改条件。", "风险核查项 · 不乘无证揽客车辆", 0xffa34c3a, "车"),
+            item(prefix + "-tip-2", name + "低价团与强制购物", "明显低于交通和住宿成本的团费需谨慎，报名合同应写明购物次数、自费项目和停留时长，遇强制消费保留合同及付款凭证。", "风险核查项 · 核对合同与旅行社资质", 0xffa06a39, "购"),
+            item(prefix + "-tip-3", name + "门票与二次收费", "购买前区分大门票、交通票、园中园、演出和体验项目，确认是否必须组合购买，避免在非官方渠道重复购票。", "风险核查项 · 以官方票种说明为准", 0xff9a6842, "票"),
+            item(prefix + "-tip-4", name + "排队与现场管理", "节假日重点核对预约时段、入口变化、接驳排队、停车容量和临时限流；现场拥挤或秩序异常时优先保证安全。", "风险核查项 · 预留等候与疏散时间", 0xff786f58, "序"),
+            item(prefix + "-tip-5", name + "餐饮住宿消费", "点餐和入住前确认总价、计价单位、押金、加床早餐及退订条款，不接受未明码标价的临时加项，保留订单和支付记录。", "风险核查项 · 先确认总价与退订", 0xff8f5f52, "价"),
+            item(prefix + "-tip-6", name + "远郊返程与接驳", "远郊景点需核对末班车、接驳预约和夜间叫车条件，不只看地图直线距离；返程方案至少保留一种备用方式。", "风险核查项 · 提前确认末班时间", 0xff557181, "行"));
     }
 
     private static List<Item> commonHotels(String city) {

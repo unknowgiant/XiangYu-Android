@@ -8,10 +8,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -23,14 +21,19 @@ final class HotelRankService {
 
     static final class Result {
         final List<String> hotels;
+        final Map<String, String> sources;
         final String meituanUrl;
         final String xiaohongshuUrl;
 
-        Result(List<String> hotels, String meituanUrl, String xiaohongshuUrl) {
+        Result(List<String> hotels, Map<String, String> sources,
+               String meituanUrl, String xiaohongshuUrl) {
             this.hotels = hotels;
+            this.sources = sources;
             this.meituanUrl = meituanUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
         }
+
+        String sourceOf(String hotel) { return sources.getOrDefault(hotel, "公开平台"); }
     }
 
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(2);
@@ -38,6 +41,7 @@ final class HotelRankService {
     private static final Pattern PLATFORM_NAME = Pattern.compile(
         "[\\\"'](?:poiName|shopName|hotelName|merchantName|displayTitle|title)[\\\"']\\s*:\\s*[\\\"']([^\\\"']{3,45})[\\\"']",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u([0-9a-fA-F]{4})");
 
     static void fetch(CityRepository.City city, Callback callback) {
         synchronized (CACHE) {
@@ -47,16 +51,18 @@ final class HotelRankService {
         EXECUTOR.execute(() -> {
             String meituan = meituanSearchUrl(city.name);
             String xiaohongshu = xiaohongshuSearchUrl(city.name);
-            Set<String> candidates = new LinkedHashSet<>();
-            collect(meituan, candidates);
-            if (candidates.size() < 3) collect(xiaohongshu, candidates);
+            Map<String, String> candidates = new LinkedHashMap<>();
+            collect(meituan, "美团", candidates);
+            if (candidates.size() < 5) collect(xiaohongshu, "小红书补充", candidates);
             List<String> hotels = new ArrayList<>();
-            for (String candidate : candidates) {
-                if (isUpscaleHotel(candidate)) continue;
-                hotels.add(candidate);
-                if (hotels.size() >= 3) break;
+            Map<String, String> sources = new LinkedHashMap<>();
+            for (Map.Entry<String, String> candidate : candidates.entrySet()) {
+                if (isUpscaleHotel(candidate.getKey())) continue;
+                hotels.add(candidate.getKey());
+                sources.put(candidate.getKey(), candidate.getValue());
+                if (hotels.size() >= 5) break;
             }
-            Result result = new Result(hotels, meituan, xiaohongshu);
+            Result result = new Result(hotels, sources, meituan, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 40) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(city.code, result);
@@ -65,14 +71,13 @@ final class HotelRankService {
         });
     }
 
-    private static void collect(String endpoint, Set<String> result) {
+    private static void collect(String endpoint, String source, Map<String, String> result) {
         try {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
-            while (matcher.find() && result.size() < 8) {
+            while (matcher.find() && result.size() < 20) {
                 String title = clean(matcher.group(1));
-                if (!looksLikeHotel(title) || title.contains("攻略") || title.contains("排行榜")
-                        || title.contains("搜索") || title.contains("登录")) continue;
-                result.add(title);
+                if (!looksLikeHotel(title) || isUnsafe(title) || looksLikeEditorial(title)) continue;
+                result.putIfAbsent(title, source);
             }
         } catch (Exception ignored) { }
     }
@@ -88,6 +93,20 @@ final class HotelRankService {
             || value.contains("丽思卡尔顿") || value.contains("华尔道夫") || value.contains("四季酒店")
             || value.contains("瑞吉") || value.contains("柏悦") || value.contains("君悦")
             || value.contains("洲际") || value.contains("香格里拉") || value.contains("文华东方");
+    }
+
+    private static boolean isUnsafe(String value) {
+        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
+            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
+            || value.contains("验证码") || value.contains("短信转发");
+    }
+
+    private static boolean looksLikeEditorial(String value) {
+        return value.contains("搜索") || value.contains("登录") || value.contains("攻略")
+            || value.contains("排行榜") || value.contains("推荐") || value.contains("探店")
+            || value.contains("合集") || value.contains("盘点") || value.contains("测评")
+            || value.contains("入住体验") || value.contains("避雷") || value.contains("这家")
+            || value.contains("分享");
     }
 
     static String meituanSearchUrl(String city) {
@@ -117,9 +136,20 @@ final class HotelRankService {
     }
 
     private static String clean(String value) {
-        return value.replace("\\\"", "\"").replaceAll("<[^>]+>", " ")
+        return decodeUnicode(value).replace("\\\"", "\"").replaceAll("<[^>]+>", " ")
             .replace("&quot;", "\"").replace("&amp;", "&").replace("&#39;", "'")
             .replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private static String decodeUnicode(String value) {
+        Matcher matcher = UNICODE_ESCAPE.matcher(value);
+        StringBuffer decoded = new StringBuffer();
+        while (matcher.find()) {
+            char character = (char) Integer.parseInt(matcher.group(1), 16);
+            matcher.appendReplacement(decoded, Matcher.quoteReplacement(String.valueOf(character)));
+        }
+        matcher.appendTail(decoded);
+        return decoded.toString();
     }
 
     private static String encode(String value) {

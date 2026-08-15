@@ -67,34 +67,63 @@ final class PhotoService {
                                         Callback callback) {
         List<Photo> result = new ArrayList<>();
         Set<Long> signatures = new HashSet<>();
+        Set<String> usedKeywords = new HashSet<>();
         for (LocalData.Item sight : sights) {
-            if (result.size() >= 5) break;
-            if (isGenericSight(sight.title)) continue;
+            if (result.size() >= 8) break;
+            if (isGenericSight(sight.title) || !usedKeywords.add(sight.title)) continue;
             int before = result.size();
             addCardPhoto(result, sight.title, city.name + " · " + sight.title, signatures);
             if (result.size() > before) callback.onResult(new ArrayList<>(result));
         }
-        if (result.isEmpty()) {
+
+        if (result.size() < 8) {
+            BaikeService.Entry cityEntry = BaikeService.card(city.officialName);
+            for (String sight : cityEntry.famousSights) {
+                if (result.size() >= 8) break;
+                if (isGenericSight(sight) || !usedKeywords.add(sight)) continue;
+                int before = result.size();
+                addCardPhoto(result, sight, city.name + " · " + sight, signatures);
+                if (result.size() > before) callback.onResult(new ArrayList<>(result));
+            }
+        }
+
+        if (result.size() < 5) {
+            for (BaikeService.Entry entry : BaikeService.suggest(city.name + " 景点")) {
+                if (result.size() >= 8) break;
+                if (entry.title.isEmpty() || isGenericSight(entry.title)
+                        || !usedKeywords.add(entry.title)) continue;
+                int before = result.size();
+                addEntryPhoto(result, entry, city.name + " · " + entry.title, signatures);
+                if (result.size() > before) callback.onResult(new ArrayList<>(result));
+            }
+        }
+
+        if (result.size() < 5 && usedKeywords.add(city.officialName)) {
+            int before = result.size();
             addCardPhoto(result, city.officialName, city.name, signatures);
-            if (!result.isEmpty()) callback.onResult(new ArrayList<>(result));
+            if (result.size() > before) callback.onResult(new ArrayList<>(result));
         }
         return result;
     }
 
     private static void addCardPhoto(List<Photo> result, String keyword, String title,
                                      Set<Long> signatures) {
-        BaikeService.Entry entry = BaikeService.card(keyword);
+        addEntryPhoto(result, BaikeService.card(keyword), title, signatures);
+    }
+
+    private static void addEntryPhoto(List<Photo> result, BaikeService.Entry entry, String title,
+                                      Set<Long> signatures) {
         if (entry.imageUrl.isEmpty()) return;
         Bitmap bitmap = downloadBitmap(entry.imageUrl);
         if (bitmap == null || bitmap.getWidth() < 240 || bitmap.getHeight() < 160) return;
         long signature = imageSignature(bitmap);
         if (isNearDuplicate(signature, signatures)) return;
         signatures.add(signature);
-        result.add(new Photo(title, "公开网络 · 词条图片", bitmap));
+        result.add(new Photo(title, "百度百科 · 词条图片", bitmap));
     }
 
     private static String homeCacheKey(CityRepository.City city, List<LocalData.Item> sights) {
-        StringBuilder value = new StringBuilder("home:v4:").append(city.code);
+        StringBuilder value = new StringBuilder("home:v5:").append(city.code);
         int count = 0;
         for (LocalData.Item sight : sights) {
             if (count++ >= 8) break;
@@ -145,11 +174,13 @@ final class PhotoService {
 
     private static Bitmap downloadBitmap(String source) {
         try {
-            HttpURLConnection connection = (HttpURLConnection) new URL(source).openConnection();
+            URL url = new URL(source);
+            if (!"https".equalsIgnoreCase(url.getProtocol()) || !isTrustedImageHost(url.getHost())) return null;
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(8000);
             connection.setRequestProperty("Referer", "https://baike.baidu.com/");
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) XiangYu/1.8.7");
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 16) XiangYu/1.9.0");
             byte[] data;
             try (InputStream input = connection.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
                 byte[] buffer = new byte[16 * 1024];
@@ -174,6 +205,12 @@ final class PhotoService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private static boolean isTrustedImageHost(String host) {
+        String value = host == null ? "" : host.toLowerCase(java.util.Locale.ROOT);
+        return value.equals("baike.baidu.com") || value.endsWith(".baidu.com")
+            || value.endsWith(".bdimg.com") || value.endsWith(".bcebos.com");
     }
 
     private PhotoService() { }

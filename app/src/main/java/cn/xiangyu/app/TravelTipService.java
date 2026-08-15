@@ -17,7 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** 从小红书公开页面读取近期旅行、出行与探店笔记，并提供美团、小红书搜索入口。 */
+/** 从小红书公开页面按风险主题读取旅行线索，并提供公开检索入口。 */
 final class TravelTipService {
     interface Callback { void onResult(Result result); }
     interface NotesCallback { void onResult(NotesResult result); }
@@ -55,13 +55,57 @@ final class TravelTipService {
     private static final Pattern PUBLIC_TITLE = Pattern.compile(
         "[\\\"'](?:displayTitle|title|desc)[\\\"']\\s*:\\s*[\\\"']([^\\\"']{8,140})[\\\"']",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u([0-9a-fA-F]{4})");
+    private static final String[][] RISK_TOPICS = {
+        {"出租车与包车", "出租车 包车 黑车 拒载 绕路 议价 宰客"},
+        {"低价团与购物", "低价团 强制购物 导游 推销 购物店"},
+        {"门票与二次收费", "景区 套票 二次收费 重复售票 园中园 另收费"},
+        {"秩序与现场管理", "景区 管理混乱 排队 插队 停车 接驳"},
+        {"餐饮住宿消费", "旅游 餐饮 住宿 隐形消费 宰客 退订"}
+    };
 
     static void fetch(CityRepository.City city, Callback callback) {
-        fetchInternal(city.code, city.name, "旅游 出行 避坑", callback);
+        fetchRiskTopics(city.code, city.name, callback);
     }
 
     static void fetchByItem(String city, String item, Callback callback) {
         fetchInternal("detail:" + city, city, item + " 旅游 避坑 出行", callback);
+    }
+
+    private static void fetchRiskTopics(String keyPrefix, String city, Callback callback) {
+        String key = keyPrefix + ":risk-topics-v2";
+        synchronized (CACHE) {
+            Result cached = CACHE.get(key);
+            if (cached != null) { callback.onResult(cached); return; }
+        }
+        EXECUTOR.execute(() -> {
+            List<String> summaries = new ArrayList<>();
+            List<LocalData.Item> tips = new ArrayList<>();
+            Set<String> used = new LinkedHashSet<>();
+            for (String[] topic : RISK_TOPICS) {
+                String endpoint = xiaohongshuSearchUrl(city, topic[1]);
+                List<String> titles = readTitles(endpoint, 2, true);
+                for (String title : titles) {
+                    String normalized = title.replaceAll("[\\p{Punct}\\s]+", "");
+                    if (!used.add(normalized)) continue;
+                    String summary = topic[0] + "｜" + title;
+                    summaries.add(summary);
+                    tips.add(new LocalData.Item(keyPrefix + "-risk-" + tips.size(),
+                        topic[0] + " · " + shortTitle(title), title,
+                        "小红书公开线索 · 发生时间与现状需交叉核实", 0xffa34c3a, "避"));
+                    break;
+                }
+                if (tips.size() >= 8) break;
+            }
+            Result result = new Result(tips, summaries,
+                meituanSearchUrl(city, "旅游 点评 投诉"),
+                xiaohongshuSearchUrl(city, "旅游 避坑 出租车 强制购物 二次收费 管理"));
+            synchronized (CACHE) {
+                if (CACHE.size() >= 40) CACHE.remove(CACHE.keySet().iterator().next());
+                CACHE.put(key, result);
+            }
+            callback.onResult(result);
+        });
     }
 
     /** 通用：抓取当前城市某主题的小红书公开笔记标题，直接展示 2-3 条。 */
@@ -72,10 +116,8 @@ final class TravelTipService {
             if (cached != null) { callback.onResult(cached); return; }
         }
         EXECUTOR.execute(() -> {
-            String xiaohongshuUrl = "https://www.xiaohongshu.com/search_result?keyword="
-                + encode(city + " " + keyword);
-            String meituanUrl = "https://www.meituan.com/s/"
-                + encode(city + " " + keyword).replace("+", "%20") + "/";
+            String xiaohongshuUrl = xiaohongshuSearchUrl(city, keyword);
+            String meituanUrl = meituanSearchUrl(city, keyword);
             List<String> notes = readTitles(xiaohongshuUrl, limit, false);
             NotesResult result = new NotesResult(notes, meituanUrl, xiaohongshuUrl);
             synchronized (NOTES_CACHE) {
@@ -93,10 +135,8 @@ final class TravelTipService {
             if (cached != null) { callback.onResult(cached); return; }
         }
         EXECUTOR.execute(() -> {
-            String xiaohongshuUrl = "https://www.xiaohongshu.com/search_result?keyword="
-                + encode(city + " " + subject + " 踩坑 注意");
-            String meituanUrl = "https://www.meituan.com/s/"
-                + encode(city + " " + subject).replace("+", "%20") + "/";
+            String xiaohongshuUrl = xiaohongshuSearchUrl(city, subject + " 踩坑 注意");
+            String meituanUrl = meituanSearchUrl(city, subject);
             List<String> summaries = readTitles(xiaohongshuUrl, 6, true);
             List<LocalData.Item> tips = new ArrayList<>();
             for (int i = 0; i < summaries.size() && i < 6; i++) {
@@ -121,6 +161,7 @@ final class TravelTipService {
             while (matcher.find() && result.size() < limit) {
                 String value = clean(matcher.group(1));
                 if (value.length() < 8 || value.contains("登录") || value.contains("搜索小红书")) continue;
+                if (isUnsafe(value)) continue;
                 if (tipOnly && !containsTipWord(value)) continue;
                 result.add(limit(value, 140));
             }
@@ -133,7 +174,29 @@ final class TravelTipService {
             || value.contains("谨慎") || value.contains("踩坑") || value.contains("攻略")
             || value.contains("排队") || value.contains("价格") || value.contains("预约")
             || value.contains("出行") || value.contains("交通") || value.contains("门票")
-            || value.contains("时间") || value.contains("路线");
+            || value.contains("时间") || value.contains("路线") || value.contains("出租车")
+            || value.contains("包车") || value.contains("黑车") || value.contains("拒载")
+            || value.contains("绕路") || value.contains("宰客") || value.contains("强制购物")
+            || value.contains("低价团") || value.contains("购物店") || value.contains("二次收费")
+            || value.contains("重复售票") || value.contains("另收费") || value.contains("套票")
+            || value.contains("园中园") || value.contains("管理混乱") || value.contains("插队")
+            || value.contains("停车") || value.contains("接驳") || value.contains("隐形消费")
+            || value.contains("退订") || value.contains("投诉");
+    }
+
+    private static boolean isUnsafe(String value) {
+        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
+            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
+            || value.contains("验证码") || value.contains("短信转发");
+    }
+
+    private static String meituanSearchUrl(String city, String keyword) {
+        return "https://www.meituan.com/s/"
+            + encode(city + " " + keyword).replace("+", "%20") + "/";
+    }
+
+    private static String xiaohongshuSearchUrl(String city, String keyword) {
+        return "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " " + keyword);
     }
 
     private static String shortTitle(String value) {
@@ -160,9 +223,20 @@ final class TravelTipService {
     }
 
     private static String clean(String value) {
-        return value.replace("\\\"", "\"").replaceAll("<[^>]+>", " ")
+        return decodeUnicode(value).replace("\\\"", "\"").replaceAll("<[^>]+>", " ")
             .replace("&quot;", "\"").replace("&amp;", "&").replace("&#39;", "'")
             .replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private static String decodeUnicode(String value) {
+        Matcher matcher = UNICODE_ESCAPE.matcher(value);
+        StringBuffer decoded = new StringBuffer();
+        while (matcher.find()) {
+            char character = (char) Integer.parseInt(matcher.group(1), 16);
+            matcher.appendReplacement(decoded, Matcher.quoteReplacement(String.valueOf(character)));
+        }
+        matcher.appendTail(decoded);
+        return decoded.toString();
     }
 
     private static String limit(String value, int max) {
