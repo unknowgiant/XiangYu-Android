@@ -8,10 +8,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
@@ -23,14 +21,19 @@ final class FoodShopService {
 
     static final class Result {
         final List<String> shops;
+        final Map<String, String> sources;
         final String meituanUrl;
         final String xiaohongshuUrl;
 
-        Result(List<String> shops, String meituanUrl, String xiaohongshuUrl) {
+        Result(List<String> shops, Map<String, String> sources,
+               String meituanUrl, String xiaohongshuUrl) {
             this.shops = shops;
+            this.sources = sources;
             this.meituanUrl = meituanUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
         }
+
+        String sourceOf(String shop) { return sources.getOrDefault(shop, "公开平台"); }
     }
 
     private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(2);
@@ -38,6 +41,7 @@ final class FoodShopService {
     private static final Pattern PLATFORM_NAME = Pattern.compile(
         "[\\\"'](?:poiName|shopName|merchantName|displayTitle|title)[\\\"']\\s*:\\s*[\\\"']([^\\\"']{2,40})[\\\"']",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u([0-9a-fA-F]{4})");
 
     static void fetch(CityRepository.City cityValue, String food, Callback callback) {
         String city = cityValue.name;
@@ -49,15 +53,17 @@ final class FoodShopService {
         EXECUTOR.execute(() -> {
             String meituan = meituanSearchUrl(city, food);
             String xiaohongshu = xiaohongshuSearchUrl(city, food);
-            Set<String> candidates = new LinkedHashSet<>();
-            collectPlatform(meituan, city, food, candidates);
-            if (candidates.size() < 3) collectPlatform(xiaohongshu, city, food, candidates);
+            Map<String, String> candidates = new LinkedHashMap<>();
+            collectPlatform(meituan, "美团", candidates);
+            if (candidates.size() < 5) collectPlatform(xiaohongshu, "小红书补充", candidates);
             List<String> shops = new ArrayList<>();
-            for (String candidate : candidates) {
-                shops.add(candidate);
-                if (shops.size() >= 3) break;
+            Map<String, String> sources = new LinkedHashMap<>();
+            for (Map.Entry<String, String> candidate : candidates.entrySet()) {
+                shops.add(candidate.getKey());
+                sources.put(candidate.getKey(), candidate.getValue());
+                if (shops.size() >= 5) break;
             }
-            Result result = new Result(shops, meituan, xiaohongshu);
+            Result result = new Result(shops, sources, meituan, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 60) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(key, result);
@@ -66,15 +72,13 @@ final class FoodShopService {
         });
     }
 
-    private static void collectPlatform(String endpoint, String city, String food, Set<String> result) {
+    private static void collectPlatform(String endpoint, String source, Map<String, String> result) {
         try {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
-            while (matcher.find() && result.size() < 6) {
+            while (matcher.find() && result.size() < 12) {
                 String title = clean(matcher.group(1));
-                if (!looksLikeShop(title)) continue;
-                if (title.contains("搜索") || title.contains("攻略") || title.contains("排行榜")
-                        || title.contains("推荐") || title.contains("登录")) continue;
-                result.add(title);
+                if (!looksLikeShop(title) || isUnsafe(title) || looksLikeEditorial(title)) continue;
+                result.putIfAbsent(title, source);
             }
         } catch (Exception ignored) { }
     }
@@ -83,6 +87,20 @@ final class FoodShopService {
         return value.contains("店") || value.contains("馆") || value.contains("楼")
             || value.contains("餐厅") || value.contains("老号") || value.contains("老字号")
             || value.contains("食府") || value.contains("小吃") || value.contains("记");
+    }
+
+    private static boolean isUnsafe(String value) {
+        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
+            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
+            || value.contains("验证码") || value.contains("短信转发");
+    }
+
+    private static boolean looksLikeEditorial(String value) {
+        return value.contains("搜索") || value.contains("登录") || value.contains("攻略")
+            || value.contains("排行榜") || value.contains("推荐") || value.contains("探店")
+            || value.contains("合集") || value.contains("盘点") || value.contains("测评")
+            || value.contains("必吃") || value.contains("打卡") || value.contains("这家")
+            || value.contains("分享");
     }
 
     static String meituanSearchUrl(String city, String food) {
@@ -112,9 +130,20 @@ final class FoodShopService {
     }
 
     private static String clean(String value) {
-        return value.replace("\\u002F", "/").replace("\\\"", "\"")
+        return decodeUnicode(value).replace("\\u002F", "/").replace("\\\"", "\"")
             .replaceAll("<[^>]+>", " ").replace("&quot;", "\"").replace("&amp;", "&")
             .replace("&#39;", "'").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+    }
+
+    private static String decodeUnicode(String value) {
+        Matcher matcher = UNICODE_ESCAPE.matcher(value);
+        StringBuffer decoded = new StringBuffer();
+        while (matcher.find()) {
+            char character = (char) Integer.parseInt(matcher.group(1), 16);
+            matcher.appendReplacement(decoded, Matcher.quoteReplacement(String.valueOf(character)));
+        }
+        matcher.appendTail(decoded);
+        return decoded.toString();
     }
 
     private static String encode(String value) {

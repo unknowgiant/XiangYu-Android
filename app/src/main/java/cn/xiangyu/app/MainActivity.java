@@ -236,12 +236,12 @@ public class MainActivity extends Activity {
     }
 
     static final class XiangYuView extends View {
-        private static final int PAPER = 0xfffbf6f3;
-        private static final int INK = 0xff3a3432;
-        private static final int MUTED = 0xff8a827d;
-        private static final int RED = 0xffc97d7d;
-        private static final int GREEN = 0xff5b8a76;
-        private static final int LINE = 0xffe9e0dc;
+        private static final int PAPER = 0xfff8f6f1;
+        private static final int INK = 0xff302e2b;
+        private static final int MUTED = 0xff77736e;
+        private static final int RED = 0xffbd6255;
+        private static final int GREEN = 0xff39745f;
+        private static final int LINE = 0xffe3ded5;
         private static final float HEADER_TOP_DP = 48f;
         private static final float WEATHER_HEIGHT_DP = 138f;
         private static final float TODAY_WEATHER_GAP_DP = 10f;
@@ -327,7 +327,7 @@ public class MainActivity extends Activity {
             }));
             HotelRankService.fetch(value, ranked -> post(() -> {
                 if (!currentCityCode.equals(value.code)) return;
-                place = LocalData.withRankedHotels(place, value, ranked.hotels);
+                place = LocalData.withRankedHotels(place, value, ranked.hotels, ranked.sources);
                 invalidate();
             }));
             TravelTipService.fetch(value, result -> post(() -> {
@@ -396,6 +396,7 @@ public class MainActivity extends Activity {
             pin(c, w - pillW - dp(6), y + dp(23), RED);
             String cityText = place.city.length() > 6 ? place.city.substring(0, 6) + "…" : place.city;
             text(c, cityText + " · " + locationLabel, dp(10), INK, w - pillW + dp(7), y + dp(27), false);
+            line(c, dp(18), y + dp(58), w - dp(18), y + dp(58), LINE, 1);
             return y + dp(60);
         }
 
@@ -460,7 +461,7 @@ public class MainActivity extends Activity {
 
         private float drawLandmarkPhotos(Canvas c, float w, float y) {
             text(c, place.city + "著名景点", dp(21), INK, dp(18), y + dp(23), true);
-            text(c, "互联网图片轮播", dp(11), MUTED, dp(18), y + dp(43), false);
+            text(c, "城市影像", dp(11), MUTED, dp(18), y + dp(43), false);
             float l = dp(16), r = w - dp(16), top = y + dp(58);
             float desiredHeight = clamp((r - l) * 0.62f, dp(210), dp(360));
             float visibleHeight = getHeight() - dp(72) - top - dp(PHOTO_BOTTOM_SPACE_DP);
@@ -471,6 +472,9 @@ public class MainActivity extends Activity {
                 PhotoService.Photo photo = landmarkPhotos.get(photoIndex % landmarkPhotos.size());
                 drawCoverBitmap(c, photo.bitmap, photoBounds);
                 paint.setColor(0x99000000); c.drawRect(l, top + h - dp(56), r, top + h, paint);
+                roundRect(c, r - dp(55), top + dp(12), r - dp(12), top + dp(35), dp(4), 0x99000000);
+                textCenter(c, (photoIndex + 1) + " / " + landmarkPhotos.size(), dp(10), Color.WHITE,
+                    r - dp(33.5f), top + dp(27), true);
                 text(c, fit(photo.title, 22), dp(17), Color.WHITE, l + dp(16), top + h - dp(29), true);
                 text(c, photo.source, dp(9), 0xddffffff, l + dp(16), top + h - dp(11), false);
                 for (int i = 0; i < landmarkPhotos.size(); i++) {
@@ -536,9 +540,13 @@ public class MainActivity extends Activity {
                 float x = l + i * (tabW + gap);
                 RectF tab = new RectF(x, y, x + tabW, y + dp(36));
                 tabBounds.add(tab);
-                roundRect(c, tab.left, tab.top, tab.right, tab.bottom, dp(18), category == contentTab ? RED : 0xfff0e9e5);
+                roundRect(c, tab.left, tab.top, tab.right, tab.bottom, dp(6), category == contentTab ? RED : 0xffeeeae2);
                 textCenter(c, tabs[i], dp(10), category == contentTab ? Color.WHITE : MUTED,
                     x + tabW / 2, y + dp(23), category == contentTab);
+                if (category == contentTab) {
+                    roundRect(c, x + tabW * 0.28f, y + dp(40), x + tabW * 0.72f,
+                        y + dp(43), dp(1.5f), RED);
+                }
             }
             return y + dp(50);
         }
@@ -599,6 +607,9 @@ public class MainActivity extends Activity {
             boolean transportRow = navTab == 1 && contentTab == 5;
             float l = dp(16), r = w - dp(16), h = dp(106);
             roundRect(c, l, y, r, y + h, dp(6), Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(1)); paint.setColor(LINE);
+            c.drawRoundRect(new RectF(l, y, r, y + h), dp(6), dp(6), paint);
+            paint.setStyle(Paint.Style.FILL);
             roundRect(c, l + dp(10), y + dp(10), l + dp(88), y + h - dp(10), dp(4), item.color);
             paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(dp(1)); paint.setColor(0x3affffff);
             c.drawCircle(l + dp(49), y + dp(53), dp(28), paint); paint.setStyle(Paint.Style.FILL);
@@ -632,6 +643,7 @@ public class MainActivity extends Activity {
             for (int i = 0; i < 3; i++) {
                 float x = w * (i * 2 + 1) / 6;
                 int color = navTab == i ? RED : MUTED;
+                if (navTab == i) roundRect(c, x - dp(18), top + dp(3), x + dp(18), top + dp(6), dp(1.5f), RED);
                 if (i == 0) calendarIcon(c, x, top + dp(24), color);
                 else if (i == 1) compass(c, x, top + dp(24), color);
                 else bookmark(c, x, top + dp(24), color, navTab == 2);
@@ -801,9 +813,10 @@ public class MainActivity extends Activity {
                     } else {
                         int index = 1;
                         for (String shop : result.shops) addDetailText(picks,
-                            index++ + ". " + shop + "\n美团/小红书公开候选 · 到店前核实", 13, INK, false);
+                            index++ + ". " + shop + "\n" + result.sourceOf(shop)
+                                + "公开结果 · 到店前核实", 13, INK, false);
                     }
-                    addDetailText(picks, "以上按公开检索顺序展示，评分与营业状态会变化，不构成商业排名。", 12, MUTED, false);
+                    addDetailText(picks, "美团公开结果优先，最多展示 5 家；不足时由小红书公开页面补充。评分与营业状态会变化，不构成商业排名。", 12, MUTED, false);
                     addSourceButton(picks, "查看美团公开检索结果", result.meituanUrl);
                     addSourceButton(picks, "在小红书搜索当地探店", result.xiaohongshuUrl);
                 }));
@@ -816,9 +829,10 @@ public class MainActivity extends Activity {
                     } else {
                         int index = 1;
                         for (String hotel : result.hotels) addDetailText(picks,
-                            index++ + ". " + hotel + "\n平价住宿候选 · 预订前核实", 13, INK, false);
+                            index++ + ". " + hotel + "\n" + result.sourceOf(hotel)
+                                + "公开结果 · 平价住宿优先", 13, INK, false);
                     }
-                    addDetailText(picks, "房价、评分与空房随日期变化，请以预订页为准。", 12, MUTED, false);
+                    addDetailText(picks, "美团公开结果优先，最多展示 5 家；已过滤名称中明确标注三星及以上或高端品牌的住宿。房价与空房请以预订页为准。", 12, MUTED, false);
                     addSourceButton(picks, "查看美团住宿公开榜单", result.meituanUrl);
                     addSourceButton(picks, "在小红书核对住宿体验", result.xiaohongshuUrl);
                 }));
@@ -827,7 +841,7 @@ public class MainActivity extends Activity {
                     if (!dialog.isShowing()) return;
                     picks.removeAllViews();
                     if (result.summaries.isEmpty()) {
-                        addDetailText(picks, "暂未提取到公开摘要，可通过下方入口继续搜索。", 13, MUTED, false);
+                        addDetailText(picks, "暂未提取到可核实的公开线索，可通过下方入口按出租车、购物、门票、收费和现场管理继续核对。", 13, MUTED, false);
                     } else {
                         int index = 1;
                         for (String summary : result.summaries) {
@@ -835,7 +849,7 @@ public class MainActivity extends Activity {
                             addDetailText(picks, index++ + ". " + summary, 13, INK, false);
                         }
                     }
-                    addDetailText(picks, "公开笔记具有时效性和主观性，请结合官方公告与现场信息交叉确认。", 12, MUTED, false);
+                    addDetailText(picks, "公开笔记只作为风险线索，不代表问题目前仍存在；请结合文旅、市场监管、景区公告与现场信息交叉确认。", 12, MUTED, false);
                     addSourceButton(picks, "在美团搜索当地点评", result.meituanUrl);
                     addSourceButton(picks, "在小红书搜索当地避坑", result.xiaohongshuUrl);
                 }));
