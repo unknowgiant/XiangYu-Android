@@ -55,6 +55,9 @@ public class MainActivity extends Activity {
     private static final int REQUEST_EXPORT_NOTEBOOK = 71;
     private static final int REQUEST_IMPORT_NOTEBOOK = 72;
     private static final int MAX_NOTEBOOK_BYTES = 2 * 1024 * 1024;
+    private static final String PRIVACY_POLICY_URL =
+        "https://unknowgiant.github.io/XiangYu-Android/privacy.html";
+    private static final String PRIVACY_ACCEPTED = "privacy_accepted_20260815";
     private XiangYuView content;
     private LocationManager locationManager;
     private CityRepository cityRepository;
@@ -70,6 +73,15 @@ public class MainActivity extends Activity {
         setContentView(content);
         // Some emulator ROMs expose API 30 but crash inside Window.getInsetsController().
         window.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        content.prepareCity(cityRepository.findByName("上海"));
+        if (getSharedPreferences("privacy", MODE_PRIVATE).getBoolean(PRIVACY_ACCEPTED, false)) {
+            initializeOnlineContent();
+        } else {
+            content.post(this::showPrivacyConsent);
+        }
+    }
+
+    private void initializeOnlineContent() {
         content.setCity(cityRepository.findByName("上海"), true);
         // Android 16 permission controllers may dim the launch window before the first frame.
         // Auto-locate only when permission already exists; otherwise keep the home screen usable.
@@ -83,9 +95,46 @@ public class MainActivity extends Activity {
         }, 300));
     }
 
+    private void showPrivacyConsent() {
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("隐私保护说明")
+            .setMessage("乡遇仅申请联网和粗略位置权限。联网用于天气、城市图片和公开旅行信息；位置仅在您主动授权后用于匹配当地城市，不读取短信、通讯录、相册或设备标识。个人笔记只保存在本机，由您主动导入或导出。\n\n请阅读完整隐私政策后选择是否继续。")
+            .setPositiveButton("同意并继续", (ignored, which) -> {
+                getSharedPreferences("privacy", MODE_PRIVATE).edit()
+                    .putBoolean(PRIVACY_ACCEPTED, true).apply();
+                initializeOnlineContent();
+            })
+            .setNegativeButton("不同意并退出", (ignored, which) -> finish())
+            .setNeutralButton("查看隐私政策", null)
+            .create();
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setOnCancelListener(ignored -> finish());
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            .setOnClickListener(view -> openPrivacyPolicy()));
+        dialog.show();
+    }
+
+    void openPrivacyPolicy() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)));
+        } catch (Exception ignored) {
+            Toast.makeText(this, "当前设备无法打开隐私政策页面", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     void requestLocation() {
         if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 42);
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("使用粗略位置")
+                .setMessage("授权后仅用于匹配当前地级市并展示当地天气与旅行内容。您可以拒绝授权并继续手动选择城市，也可以随时在系统设置中撤回权限。")
+                .setPositiveButton("继续授权", (ignored, which) -> requestPermissions(
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 42))
+                .setNegativeButton("暂不使用", null)
+                .setNeutralButton("隐私政策", null)
+                .create();
+            dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+                .setOnClickListener(view -> openPrivacyPolicy()));
+            dialog.show();
             return;
         }
         findLocation();
@@ -266,6 +315,7 @@ public class MainActivity extends Activity {
         private RectF photoBounds;
         private RectF importNotebookBounds;
         private RectF exportNotebookBounds;
+        private RectF privacyPolicyBounds;
         private final List<PhotoService.Photo> landmarkPhotos = new ArrayList<>();
         private int photoIndex;
         private boolean photosLoading;
@@ -311,12 +361,24 @@ public class MainActivity extends Activity {
             scrollY = 0;
         }
 
-        void setCity(CityRepository.City value, boolean initial) {
+        void prepareCity(CityRepository.City value) {
             currentCity = value;
             currentCityCode = value.code;
             place = LocalData.forCity(value);
-            landmarkPhotos.clear(); photoIndex = 0; photosLoading = true; photosFailed = false;
+            locationLabel = "点此选城市";
+            landmarkPhotos.clear();
+            photoIndex = 0;
+            photosLoading = false;
+            photosFailed = false;
             scrollY = 0;
+            invalidate();
+        }
+
+        void setCity(CityRepository.City value, boolean initial) {
+            String existingLocationLabel = locationLabel;
+            prepareCity(value);
+            if (!initial) locationLabel = existingLocationLabel;
+            landmarkPhotos.clear(); photoIndex = 0; photosLoading = true; photosFailed = false;
             invalidate();
             refreshLandmarkPhotos(value, place.sights);
             WeatherService.fetch(value.lat, value.lon, result -> post(() -> {
@@ -369,6 +431,7 @@ public class MainActivity extends Activity {
             photoBounds = null;
             importNotebookBounds = null;
             exportNotebookBounds = null;
+            privacyPolicyBounds = null;
             if (navTab == 1) {
                 float listTop = drawDiscoverNavigation(canvas, w, contentTop + dp(10));
                 canvas.save();
@@ -574,7 +637,10 @@ public class MainActivity extends Activity {
                 exportNotebookBounds.right, exportNotebookBounds.bottom, dp(4), RED);
             textCenter(c, "导入记事本", dp(11), INK, importNotebookBounds.centerX(), buttonTop + dp(26), true);
             textCenter(c, "导出记事本", dp(11), Color.WHITE, exportNotebookBounds.centerX(), buttonTop + dp(26), true);
-            y += dp(120);
+            privacyPolicyBounds = new RectF(left, buttonTop + dp(48), right, buttonTop + dp(78));
+            textCenter(c, "隐私政策与权限说明", dp(10), GREEN, privacyPolicyBounds.centerX(),
+                privacyPolicyBounds.top + dp(20), true);
+            y += dp(154);
             if (favorites.isEmpty()) {
                 roundRect(c, dp(16), y, w - dp(16), y + dp(150), dp(6), Color.WHITE);
                 bookmark(c, w / 2, y + dp(48), MUTED, false);
@@ -708,6 +774,9 @@ public class MainActivity extends Activity {
                     }
                     if (exportNotebookBounds != null && exportNotebookBounds.contains(x, localY)) {
                         ((MainActivity) getContext()).exportNotebook(); return true;
+                    }
+                    if (privacyPolicyBounds != null && privacyPolicyBounds.contains(x, localY)) {
+                        ((MainActivity) getContext()).openPrivacyPolicy(); return true;
                     }
                 }
                 for (int i = 0; i < heartBounds.size(); i++) {
