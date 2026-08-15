@@ -815,14 +815,15 @@ public class MainActivity extends Activity {
                     if (!dialog.isShowing()) return;
                     picks.removeAllViews();
                     if (result.shops.isEmpty()) {
-                        addDetailText(picks, "平台搜索页采用动态加载或触发访问验证，本次未返回可核实店名。可通过下方入口查看实时结果。", 13, INK, false);
+                        addDetailText(picks, "本次未获取到可核实店名，可能是网络或高德 POI 服务暂时不可用。可通过下方入口查看实时结果。", 13, INK, false);
                     } else {
                         int index = 1;
                         for (String shop : result.shops) addDetailText(picks,
                             index++ + ". " + shop + "\n" + result.sourceOf(shop)
-                                + "公开结果 · 到店前核实", 13, INK, false);
+                                + " · 到店前核实", 13, INK, false);
                     }
-                    addDetailText(picks, "美团公开结果优先，抖音和小红书公开页补充，最多展示 5 家。应用不绕过平台验证，评分与营业状态请到店前核实。", 12, MUTED, false);
+                    addDetailText(picks, "优先展示高德官方 POI 中与本小吃匹配的最多 5 家候选，美团、抖音和小红书用于核对近期口碑。评分、价格与营业状态请到店前复核。", 12, MUTED, false);
+                    addSourceButton(picks, "在高德查看店铺位置", result.amapUrl);
                     addSourceButton(picks, "查看美团公开检索结果", result.meituanUrl);
                     addSourceButton(picks, "在抖音搜索当地探店", result.douyinUrl);
                     addSourceButton(picks, "在小红书搜索当地探店", result.xiaohongshuUrl);
@@ -832,14 +833,15 @@ public class MainActivity extends Activity {
                     if (!dialog.isShowing()) return;
                     picks.removeAllViews();
                     if (result.hotels.isEmpty()) {
-                        addDetailText(picks, "平台搜索页采用动态加载或触发访问验证，本次未返回可核实住宿名。可通过下方入口查看实时结果。", 13, INK, false);
+                        addDetailText(picks, "本次未获取到可核实住宿名，可能是网络或高德 POI 服务暂时不可用。可通过下方入口查看实时结果。", 13, INK, false);
                     } else {
                         int index = 1;
                         for (String hotel : result.hotels) addDetailText(picks,
                             index++ + ". " + hotel + "\n" + result.sourceOf(hotel)
-                                + "公开结果 · 平价住宿优先", 13, INK, false);
+                                + " · 平价住宿优先", 13, INK, false);
                     }
-                    addDetailText(picks, "美团公开结果优先，抖音和小红书公开页补充，最多展示 5 家；明确三星及以上或高端品牌的住宿不进入前五。", 12, MUTED, false);
+                    addDetailText(picks, "优先展示高德官方 POI 中最多 5 家平价住宿候选；明确三星及以上、高档类型或高端品牌的住宿会被过滤，美团和小红书用于核对近期住客体验。", 12, MUTED, false);
+                    addSourceButton(picks, "在高德查看住宿位置", result.amapUrl);
                     addSourceButton(picks, "查看美团住宿公开榜单", result.meituanUrl);
                     addSourceButton(picks, "在抖音搜索平价住宿", result.douyinUrl);
                     addSourceButton(picks, "在小红书核对住宿体验", result.xiaohongshuUrl);
@@ -895,7 +897,7 @@ public class MainActivity extends Activity {
             appendNearbySection(value, "附近住宿", result.hotels, localHotelFallback());
             appendNearbySection(value, "交通汇聚点", result.transport,
                 new String[]{"城市火车站或客运站 · 距离和班次请用地图复核", "公共交通换乘点 · 以实时导航为准"});
-            value.append("\n距离为直线参考；营业、价格、空房、班次和步行路线请再次核实。");
+            value.append("\n在线结果来自高德开放平台 POI；距离为直线参考，营业、价格、空房、班次和步行路线请再次核实。");
             if (!result.fresh) value.append("\n当前网络查询未完成，已显示本地参考。");
             return value.toString();
         }

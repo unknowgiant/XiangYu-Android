@@ -15,21 +15,23 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Reads public Meituan and Xiaohongshu lodging pages without a platform account. */
+/** Uses official Amap lodging POI first, with public platform pages as fallbacks. */
 final class HotelRankService {
     interface Callback { void onResult(Result result); }
 
     static final class Result {
         final List<String> hotels;
         final Map<String, String> sources;
+        final String amapUrl;
         final String meituanUrl;
         final String douyinUrl;
         final String xiaohongshuUrl;
 
-        Result(List<String> hotels, Map<String, String> sources,
+        Result(List<String> hotels, Map<String, String> sources, String amapUrl,
                String meituanUrl, String douyinUrl, String xiaohongshuUrl) {
             this.hotels = hotels;
             this.sources = sources;
+            this.amapUrl = amapUrl;
             this.meituanUrl = meituanUrl;
             this.douyinUrl = douyinUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
@@ -54,8 +56,16 @@ final class HotelRankService {
             String meituan = meituanSearchUrl(city.name);
             String douyin = douyinSearchUrl(city.name);
             String xiaohongshu = xiaohongshuSearchUrl(city.name);
+            String amap = AmapPoiService.searchUrl(city.name, "平价酒店");
             Map<String, String> candidates = new LinkedHashMap<>();
-            collect(meituan, "美团", candidates);
+            for (AmapPoiService.Poi poi : AmapPoiService.search(
+                    city, "快捷酒店|宾馆|青年旅舍|客栈|民宿", AmapPoiService.LODGING_TYPES, 25)) {
+                if (AmapPoiService.isLikelyUpscale(poi)
+                        || isUpscaleHotel(poi.name) || isUpscaleHotel(poi.type)) continue;
+                candidates.putIfAbsent(poi.detail(false), "高德开放平台 POI");
+                if (candidates.size() >= 5) break;
+            }
+            if (candidates.size() < 5) collect(meituan, "美团补充", candidates);
             if (candidates.size() < 5) collect(douyin, "抖音补充", candidates);
             if (candidates.size() < 5) collect(xiaohongshu, "小红书补充", candidates);
             List<String> hotels = new ArrayList<>();
@@ -66,7 +76,7 @@ final class HotelRankService {
                 sources.put(candidate.getKey(), candidate.getValue());
                 if (hotels.size() >= 5) break;
             }
-            Result result = new Result(hotels, sources, meituan, douyin, xiaohongshu);
+            Result result = new Result(hotels, sources, amap, meituan, douyin, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 40) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(city.code, result);
@@ -95,6 +105,7 @@ final class HotelRankService {
 
     private static boolean isUpscaleHotel(String value) {
         return value.contains("五星") || value.contains("四星") || value.contains("三星")
+            || value.contains("豪华型") || value.contains("高档型") || value.contains("高档宾馆")
             || value.contains("丽思卡尔顿") || value.contains("华尔道夫") || value.contains("四季酒店")
             || value.contains("瑞吉") || value.contains("柏悦") || value.contains("君悦")
             || value.contains("洲际") || value.contains("香格里拉") || value.contains("文华东方");

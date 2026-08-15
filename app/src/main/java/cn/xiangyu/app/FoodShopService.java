@@ -15,21 +15,23 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Reads only public Meituan and Xiaohongshu pages; no account or private API is used. */
+/** Uses official Amap POI first, with public platform pages only as fallback links. */
 final class FoodShopService {
     interface Callback { void onResult(Result result); }
 
     static final class Result {
         final List<String> shops;
         final Map<String, String> sources;
+        final String amapUrl;
         final String meituanUrl;
         final String douyinUrl;
         final String xiaohongshuUrl;
 
-        Result(List<String> shops, Map<String, String> sources,
+        Result(List<String> shops, Map<String, String> sources, String amapUrl,
                String meituanUrl, String douyinUrl, String xiaohongshuUrl) {
             this.shops = shops;
             this.sources = sources;
+            this.amapUrl = amapUrl;
             this.meituanUrl = meituanUrl;
             this.douyinUrl = douyinUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
@@ -56,8 +58,14 @@ final class FoodShopService {
             String meituan = meituanSearchUrl(city, food);
             String douyin = douyinSearchUrl(city, food);
             String xiaohongshu = xiaohongshuSearchUrl(city, food);
+            String amap = AmapPoiService.searchUrl(city, food);
             Map<String, String> candidates = new LinkedHashMap<>();
-            collectPlatform(meituan, "美团", candidates);
+            for (AmapPoiService.Poi poi : AmapPoiService.search(
+                    cityValue, food, AmapPoiService.DINING_TYPES, 10)) {
+                candidates.putIfAbsent(poi.detail(false), "高德开放平台 POI");
+                if (candidates.size() >= 5) break;
+            }
+            if (candidates.size() < 5) collectPlatform(meituan, "美团补充", candidates);
             if (candidates.size() < 5) collectPlatform(douyin, "抖音补充", candidates);
             if (candidates.size() < 5) collectPlatform(xiaohongshu, "小红书补充", candidates);
             List<String> shops = new ArrayList<>();
@@ -67,7 +75,7 @@ final class FoodShopService {
                 sources.put(candidate.getKey(), candidate.getValue());
                 if (shops.size() >= 5) break;
             }
-            Result result = new Result(shops, sources, meituan, douyin, xiaohongshu);
+            Result result = new Result(shops, sources, amap, meituan, douyin, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 60) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(key, result);

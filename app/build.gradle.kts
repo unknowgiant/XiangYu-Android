@@ -1,6 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+val amapWebKey = localProperties.getProperty("AMAP_WEB_KEY", "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "cn.xiangyu.app"
@@ -10,8 +20,13 @@ android {
         applicationId = "cn.xiangyu.travelguide"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
-        versionName = "1.9.1"
+        versionCode = 36
+        versionName = "1.9.2"
+        buildConfigField("String", "AMAP_WEB_KEY", "\"$amapWebKey\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {
