@@ -49,12 +49,12 @@ final class HotelRankService {
             String xiaohongshu = xiaohongshuSearchUrl(city.name);
             Set<String> candidates = new LinkedHashSet<>();
             collect(meituan, candidates);
-            if (candidates.size() < 5) collect(xiaohongshu, candidates);
+            if (candidates.size() < 3) collect(xiaohongshu, candidates);
             List<String> hotels = new ArrayList<>();
             for (String candidate : candidates) {
                 if (isUpscaleHotel(candidate)) continue;
                 hotels.add(candidate);
-                if (hotels.size() >= 5) break;
+                if (hotels.size() >= 3) break;
             }
             Result result = new Result(hotels, meituan, xiaohongshu);
             synchronized (CACHE) {
@@ -68,7 +68,7 @@ final class HotelRankService {
     private static void collect(String endpoint, Set<String> result) {
         try {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
-            while (matcher.find() && result.size() < 12) {
+            while (matcher.find() && result.size() < 8) {
                 String title = clean(matcher.group(1));
                 if (!looksLikeHotel(title) || title.contains("攻略") || title.contains("排行榜")
                         || title.contains("搜索") || title.contains("登录")) continue;

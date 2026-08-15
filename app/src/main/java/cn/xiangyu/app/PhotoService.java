@@ -90,7 +90,7 @@ final class PhotoService {
         long signature = imageSignature(bitmap);
         if (isNearDuplicate(signature, signatures)) return;
         signatures.add(signature);
-        result.add(new Photo(title, "百度百科 · 词条图片", bitmap));
+        result.add(new Photo(title, "公开网络 · 词条图片", bitmap));
     }
 
     private static String homeCacheKey(CityRepository.City city, List<LocalData.Item> sights) {

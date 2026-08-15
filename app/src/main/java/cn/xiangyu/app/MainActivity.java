@@ -62,8 +62,8 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         Window window = getWindow();
-        window.setStatusBarColor(0xfff8f6f1);
-        window.setNavigationBarColor(0xfff8f6f1);
+        window.setStatusBarColor(0xfffbf6f3);
+        window.setNavigationBarColor(0xfffbf6f3);
         cityRepository = new CityRepository(this);
         LocalData.validateCoverage(cityRepository.all());
         content = new XiangYuView(this);
@@ -236,12 +236,12 @@ public class MainActivity extends Activity {
     }
 
     static final class XiangYuView extends View {
-        private static final int PAPER = 0xfff8f6f1;
-        private static final int INK = 0xff252823;
-        private static final int MUTED = 0xff73776e;
-        private static final int RED = 0xffc8503a;
-        private static final int GREEN = 0xff476b5a;
-        private static final int LINE = 0xffe4e0d7;
+        private static final int PAPER = 0xfffbf6f3;
+        private static final int INK = 0xff3a3432;
+        private static final int MUTED = 0xff8a827d;
+        private static final int RED = 0xffc97d7d;
+        private static final int GREEN = 0xff5b8a76;
+        private static final int LINE = 0xffe9e0dc;
         private static final float HEADER_TOP_DP = 48f;
         private static final float WEATHER_HEIGHT_DP = 138f;
         private static final float TODAY_WEATHER_GAP_DP = 10f;
@@ -325,20 +325,9 @@ public class MainActivity extends Activity {
                 invalidate();
                 if (!initial && !result.fresh) Toast.makeText(getContext(), "网络暂不可用，天气为参考数据", Toast.LENGTH_SHORT).show();
             }));
-            DestinationService.fetch(getContext(), value, result -> post(() -> {
+            HotelRankService.fetch(value, ranked -> post(() -> {
                 if (!currentCityCode.equals(value.code)) return;
-                place = LocalData.withOnline(place, result);
-                if (!result.sights.isEmpty()) refreshLandmarkPhotos(value, place.sights);
-                invalidate();
-                HotelRankService.fetch(value, ranked -> post(() -> {
-                    if (!currentCityCode.equals(value.code)) return;
-                    place = LocalData.withRankedHotels(place, value, ranked.hotels);
-                    invalidate();
-                }));
-            }));
-            CityContentService.fetch(getContext(), value, result -> post(() -> {
-                if (!currentCityCode.equals(value.code)) return;
-                place = LocalData.withCityDiscovery(place, result);
+                place = LocalData.withRankedHotels(place, value, ranked.hotels);
                 invalidate();
             }));
             TravelTipService.fetch(value, result -> post(() -> {
@@ -547,7 +536,7 @@ public class MainActivity extends Activity {
                 float x = l + i * (tabW + gap);
                 RectF tab = new RectF(x, y, x + tabW, y + dp(36));
                 tabBounds.add(tab);
-                roundRect(c, tab.left, tab.top, tab.right, tab.bottom, dp(4), category == contentTab ? RED : 0xffebe8e0);
+                roundRect(c, tab.left, tab.top, tab.right, tab.bottom, dp(18), category == contentTab ? RED : 0xfff0e9e5);
                 textCenter(c, tabs[i], dp(10), category == contentTab ? Color.WHITE : MUTED,
                     x + tabW / 2, y + dp(23), category == contentTab);
             }
@@ -759,33 +748,14 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             addDetailText(content, item.subtitle, 15, INK, false);
             addDetailText(content, item.meta, 12, MUTED, false);
-            TextView knowledge = null;
-            LinearLayout sourceActions = null;
-            if (category == 0 || category == 1 || category == 2 || category == 4) {
-                addDetailText(content, "资料补充", 15, RED, true);
-                knowledge = addDetailText(content, localKnowledgeFallback(item, category)
-                    + "\n\n正在查询百度百科词条资料…", 13, MUTED, false);
-                sourceActions = new LinearLayout(getContext());
-                sourceActions.setOrientation(LinearLayout.VERTICAL);
-                content.addView(sourceActions, new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            }
-            LinearLayout foodShops = null;
-            if (category == 0) {
-                addDetailText(content, "当地店铺候选", 15, RED, true);
-                foodShops = new LinearLayout(getContext());
-                foodShops.setOrientation(LinearLayout.VERTICAL);
-                addDetailText(foodShops, "正在按当前城市和小吃名称查询 1 至 2 家店铺…", 13, MUTED, false);
-                content.addView(foodShops);
-            }
-            LinearLayout travelTipArea = null;
-            if (category == 3) {
-                addDetailText(content, "近期公开避坑线索", 15, RED, true);
-                travelTipArea = new LinearLayout(getContext());
-                travelTipArea.setOrientation(LinearLayout.VERTICAL);
-                addDetailText(travelTipArea, "正在查询小红书公开页面线索…", 13, MUTED, false);
-                content.addView(travelTipArea);
-            }
+            String pickTitle = category == 0 ? "附近好店" : category == 4 ? "平价住宿参考"
+                : category == 3 ? "近期避坑与出行提醒" : category == 1 ? "近期体验与分享" : "近期游玩攻略";
+            addDetailText(content, pickTitle, 15, RED, true);
+            LinearLayout picks = new LinearLayout(getContext());
+            picks.setOrientation(LinearLayout.VERTICAL);
+            addDetailText(picks, "正在从美团和小红书获取近期公开内容…", 13, MUTED, false);
+            content.addView(picks, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             TextView nearby = null;
             if (category == 2) {
                 String locationNote = item.hasLocation()
@@ -822,55 +792,67 @@ public class MainActivity extends Activity {
                     LinearLayout.LayoutParams.MATCH_PARENT, imageHeight));
                 addDetailText(imageArea, "图片来源：" + photo.source, 11, MUTED, false);
             }));
-            if (category == 0 || category == 1 || category == 2 || category == 4) {
-                TextView knowledgeText = knowledge;
-                LinearLayout actionRow = sourceActions;
-                KnowledgeService.fetch(cityName, item, category, result -> post(() -> {
-                    if (!dialog.isShowing()) return;
-                    knowledgeText.setText(result.introduction.isEmpty()
-                        ? localKnowledgeFallback(item, category)
-                        : result.introduction + "\n\n来源：" + result.source);
-                    actionRow.removeAllViews();
-                    addSourceButton(actionRow, "在百度百科中查看", result.baikeUrl);
-                }));
-            }
             if (category == 0) {
-                LinearLayout shopArea = foodShops;
                 FoodShopService.fetch(currentCity, item.title, result -> post(() -> {
                     if (!dialog.isShowing()) return;
-                    shopArea.removeAllViews();
+                    picks.removeAllViews();
                     if (result.shops.isEmpty()) {
-                        addDetailText(shopArea,
-                            "平台公开页面暂未返回可可靠提取的具体店名。请通过下方美团和小红书入口查看当前城市结果，避免把动态页面中的推荐误写成固定榜单。",
-                            13, INK, false);
+                        addDetailText(picks, "暂未提取到可靠店铺名，可通过下方美团和小红书入口查看当前城市结果。", 13, INK, false);
                     } else {
                         int index = 1;
-                        for (String shop : result.shops) addDetailText(shopArea,
-                            index++ + ". " + shop + "\n美团/小红书公开页面候选 · 到店前核实", 13, INK, false);
+                        for (String shop : result.shops) addDetailText(picks,
+                            index++ + ". " + shop + "\n美团/小红书公开候选 · 到店前核实", 13, INK, false);
                     }
-                    addDetailText(shopArea, "前五候选按本次公开检索顺序展示，平台热度、评分和营业状态会变化，不构成商业排名。", 12, MUTED, false);
-                    addSourceButton(shopArea, "查看美团公开检索结果", result.meituanUrl);
-                    addSourceButton(shopArea, "在小红书搜索当地探店", result.xiaohongshuUrl);
+                    addDetailText(picks, "以上按公开检索顺序展示，评分与营业状态会变化，不构成商业排名。", 12, MUTED, false);
+                    addSourceButton(picks, "查看美团公开检索结果", result.meituanUrl);
+                    addSourceButton(picks, "在小红书搜索当地探店", result.xiaohongshuUrl);
                 }));
-            }
-            if (category == 4) {
-                addSourceButton(content, "查看美团住宿公开榜单", HotelRankService.meituanSearchUrl(cityName));
-                addSourceButton(content, "在小红书核对近期住宿体验", HotelRankService.xiaohongshuSearchUrl(cityName));
-                addDetailText(content, "住宿前五候选按本次公开检索顺序展示；房价、评分、空房和榜单位置随日期变化，请在预订页再次确认。", 12, MUTED, false);
-            }
-            if (category == 3) {
-                LinearLayout tipArea = travelTipArea;
+            } else if (category == 4) {
+                HotelRankService.fetch(currentCity, result -> post(() -> {
+                    if (!dialog.isShowing()) return;
+                    picks.removeAllViews();
+                    if (result.hotels.isEmpty()) {
+                        addDetailText(picks, "暂未提取到可靠住宿名，可通过下方美团和小红书入口查看。", 13, INK, false);
+                    } else {
+                        int index = 1;
+                        for (String hotel : result.hotels) addDetailText(picks,
+                            index++ + ". " + hotel + "\n平价住宿候选 · 预订前核实", 13, INK, false);
+                    }
+                    addDetailText(picks, "房价、评分与空房随日期变化，请以预订页为准。", 12, MUTED, false);
+                    addSourceButton(picks, "查看美团住宿公开榜单", result.meituanUrl);
+                    addSourceButton(picks, "在小红书核对住宿体验", result.xiaohongshuUrl);
+                }));
+            } else if (category == 3) {
                 TravelTipService.fetchByItem(cityName, item.title, result -> post(() -> {
                     if (!dialog.isShowing()) return;
-                    tipArea.removeAllViews();
+                    picks.removeAllViews();
                     if (result.summaries.isEmpty()) {
-                        addDetailText(tipArea, "暂未提取到公开摘要，可通过下面入口按城市继续搜索。", 13, MUTED, false);
+                        addDetailText(picks, "暂未提取到公开摘要，可通过下方入口继续搜索。", 13, MUTED, false);
                     } else {
-                        for (String summary : result.summaries) addDetailText(tipArea,
-                            "• " + summary, 13, INK, false);
+                        int index = 1;
+                        for (String summary : result.summaries) {
+                            if (index > 3) break;
+                            addDetailText(picks, index++ + ". " + summary, 13, INK, false);
+                        }
                     }
-                    addDetailText(tipArea, "公开笔记具有时效性和主观性，请结合官方公告、近期评论与现场价格交叉确认。", 12, MUTED, false);
-                    addSourceButton(tipArea, "在小红书搜索当地避坑", result.xiaohongshuUrl);
+                    addDetailText(picks, "公开笔记具有时效性和主观性，请结合官方公告与现场信息交叉确认。", 12, MUTED, false);
+                    addSourceButton(picks, "在美团搜索当地点评", result.meituanUrl);
+                    addSourceButton(picks, "在小红书搜索当地避坑", result.xiaohongshuUrl);
+                }));
+            } else if (category == 1 || category == 2) {
+                String keyword = category == 1 ? item.title + " 体验" : item.title + " 攻略";
+                TravelTipService.fetchNotes(cityName, keyword, 3, result -> post(() -> {
+                    if (!dialog.isShowing()) return;
+                    picks.removeAllViews();
+                    if (result.notes.isEmpty()) {
+                        addDetailText(picks, "暂未提取到公开笔记，可通过下方入口继续搜索。", 13, MUTED, false);
+                    } else {
+                        int index = 1;
+                        for (String line : result.notes) addDetailText(picks, index++ + ". " + line, 13, INK, false);
+                    }
+                    addDetailText(picks, "内容来自小红书公开页面，具有主观性和时效性，仅供参考。", 12, MUTED, false);
+                    addSourceButton(picks, "在美团搜索相关去处", result.meituanUrl);
+                    addSourceButton(picks, "在小红书查看完整笔记", result.xiaohongshuUrl);
                 }));
             }
             if (category == 2) {
@@ -981,8 +963,14 @@ public class MainActivity extends Activity {
 
         private void addSourceButton(LinearLayout parent, String label, String url) {
             Button button = new Button(getContext());
-            button.setText(label); button.setTextSize(12); button.setTextColor(RED);
-            button.setAllCaps(false); button.setMinHeight(dpInt(42));
+            button.setText(label); button.setTextSize(13); button.setTextColor(RED);
+            button.setAllCaps(false); button.setMinHeight(dpInt(46));
+            button.setPadding(dpInt(18), 0, dpInt(18), 0);
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setColor(0xfffbe9e6);
+            bg.setCornerRadius(dp(22));
+            button.setBackground(bg);
+            button.setStateListAnimator(null);
             button.setOnClickListener(v -> {
                 try {
                     getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
@@ -991,26 +979,9 @@ public class MainActivity extends Activity {
                 }
             });
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpInt(44));
-            params.topMargin = dpInt(2);
+                LinearLayout.LayoutParams.MATCH_PARENT, dpInt(46));
+            params.topMargin = dpInt(6);
             parent.addView(button, params);
-        }
-
-        private String localKnowledgeFallback(LocalData.Item item, int category) {
-            if (category == 0) {
-                return item.title + "可从原料、做法、口感和当地食用场景进一步了解。同名小吃在不同街区或县区可能有不同版本，建议少量品尝并比较本地老店与居民常去的小店。\n\n"
-                    + "网络资料仅从百度百科补充；具体店铺通过美团和小红书核对。";
-            }
-            if (category == 1) {
-                return item.title + "适合结合当地历史、生活环境和传承方式理解。参观、观演或参与节庆时，应先确认开放时间、拍摄规则与礼俗禁忌。\n\n"
-                    + "网络资料仅从百度百科补充。";
-            }
-            if (category == 2) {
-                return item.title + "可从景观类型、历史背景、核心看点、适合人群和建议游览时长进一步了解。亲子场馆注意预约与闭馆日，红色纪念场所注意讲解与团队时段，自然景观重点核对天气、道路、补给和末班交通。\n\n"
-                    + "门票、开放时间、预约入口和临时管制以景区官方渠道为准。";
-            }
-            return item.title + "属于住宿区域或类型参考。实际选择时应比较含税总价、近期住客评价、隔音、卫生、取消政策和到公共交通的真实步行距离。\n\n"
-                + "可通过美团和小红书了解近期住宿体验；价格和营业状态仍以预订页及酒店确认为准。";
         }
 
         private int dpInt(float value) { return Math.round(dp(value)); }

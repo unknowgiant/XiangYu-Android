@@ -187,89 +187,27 @@ final class LocalData {
             }
         }
         RegionProfile profile = profile(city.province);
-        CityProfile cityProfile = cityProfile(city.name, city.province);
-        if (city.curatedContent && cityProfile == null) {
-            throw new IllegalStateException("Missing curated content for city " + city.code);
+        CityContentData.CityContent content = CityContentData.forName(city.name);
+        if (content == null) {
+            throw new IllegalStateException("Missing generated content for city " + city.code);
         }
-        String id = city.code;
-        List<Item> food = !city.curatedContent
-            ? cityScopedFood(city) : cityFood(city, cityProfile);
-        List<Item> culture = !city.curatedContent
-            ? cityScopedCulture(city) : cityCulture(city, cityProfile);
-        List<Item> sights = Arrays.asList(
-            item(id + "-sight-1", city.name + "城市风貌", "先从博物馆、老城或城市公园认识当地历史与空间。", "基础推荐 · 开放时间以现场为准", 0xff47748a, "城"),
-            item(id + "-sight-2", city.name + "自然与郊野景观", "按“" + city.officialName + " 景点”获取本市范围结果，天气、季节和交通会显著影响体验。", "地市专属 · 行前核实", 0xff4f7562, "景"),
-            item(id + "-sight-3", city.name + "博物馆与文化场馆", "通过本市地方馆藏了解城市沿革、物产与民俗，开放时间和预约规则请提前确认。", "地市专属 · 留意闭馆日", 0xff6b647a, "博"),
-            item(id + "-sight-4", city.name + "老城与历史街区", "适合步行观察本市传统建筑和日常生活，游览时尊重居民空间。", "地市专属 · 建议步行", 0xff8b694a, "巷"),
-            item(id + "-sight-5", city.name + "城市公园与滨水空间", "可作为轻松行程或转场休息点，雨季和高温天气注意开放情况。", "地市专属 · 免费区域优先", 0xff4f7562, "园"),
-            item(id + "-sight-6", city.name + "所辖县区目的地", "地级市范围较大，热门目的地可能离市区数小时车程。", "地市专属 · 先看距离", 0xff8b694a, "路"),
-            item(id + "-sight-7", city.name + "亲子科普与遛娃去处", "优先查找科技馆、动物园、自然教育中心和有完善休息设施的公园，核对预约、适龄范围与闭馆日。", "亲子遛娃 · 联网补充具体地点", 0xff4f7562, "亲"),
-            item(id + "-sight-8", city.name + "红色记忆与纪念场馆", "结合本市纪念馆、革命旧址、会址和烈士纪念设施了解地方历史，参观时遵守场馆秩序。", "红色学习 · 联网补充具体地点", 0xffa34c3a, "红"),
-            item(id + "-sight-9", city.name + "小众自然景观", "寻找湿地、森林、峡谷、地质遗迹和自然保护地等低密度去处，提前核实天气、道路、补给和返程。", "纯自然景观 · 联网补充具体地点", 0xff4f7562, "野"));
         return new Place(city.name, city.province, city.lat, city.lon,
-            "已覆盖 " + city.officialName + "，在线补充当地景点与出行建议", food, culture, sights,
+            "已收录 " + city.officialName + " 的地方风物",
+            expandedFood(toItems(city, "food", content.food, 0xffc4633f, "食"), city, profile),
+            expandedCulture(toItems(city, "culture", content.culture, 0xff537263, "俗"), city, profile),
+            expandedSights(toItems(city, "sight", content.sights, 0xff47748a, "景"), city, profile),
             commonTips(city.name), commonHotels(city.name));
     }
 
-    private static List<Item> cityFood(CityRepository.City city, CityProfile profile) {
-        String id = city.code;
-        return Arrays.asList(
-            item(id + "-food-1", profile.food[0], profile.food[0] + "是" + city.name + "较有代表性的地方风味，可从本地老店少量品尝。", "地市代表 · 到店确认价格", 0xffc4633f, "味"),
-            item(id + "-food-2", profile.food[1], profile.food[1] + "在当地常见做法、配料和食用场景各有讲究。", "本地小吃 · 百度百科", 0xffb98942, "食"),
-            item(id + "-food-3", profile.food[2], "建议比较居民区小店与老字号的不同做法，并留意实际营业时间。", "地方风味 · 少量多尝", 0xffd17a42, "尝"),
-            item(id + "-food-4", city.name + "传统早点", "清晨到居民区、菜市场周边寻找日常早餐，比景区套餐更接近本地口味。", "晨间风味 · 留意营业时间", 0xff7c754d, "早"),
-            item(id + "-food-5", city.name + "时令家常菜", "优先询问当季食材、份量、做法和时价，选择当地人日常就餐的街区。", "在地餐桌 · 明码问价", 0xffa96545, "鲜"));
-    }
-
-    private static List<Item> cityCulture(CityRepository.City city, CityProfile profile) {
-        String id = city.code;
-        return Arrays.asList(
-            item(id + "-culture-1", profile.culture[0], profile.culture[0] + "与" + city.name + "的历史和地方生活联系紧密。", cultureMeta(profile.culture[0]), 0xff537263, "俗"),
-            item(id + "-culture-2", profile.culture[1], "可通过当地博物馆、非遗馆、正规展演或传承场所了解背景。", cultureMeta(profile.culture[1]), 0xff8a5f76, "艺"),
-            item(id + "-culture-3", profile.culture[2], "活动时间可能随农历、季节和现场安排调整，参与前应再次确认。", cultureMeta(profile.culture[2]), 0xffa45c4f, "文"),
-            item(id + "-culture-4", city.name + "地方节庆与市集", "节庆和庙会日期可能临时调整，参加时遵守秩序并尊重居民与仪式空间。", "民俗体验 · 提前查询", 0xff765b82, "节"),
-            item(id + "-culture-5", city.name + "老城街巷生活", "从地方馆藏、老街和日常社区观察城市沿革，避免只依据商业化打卡内容。", "城市漫游 · 文明参观", 0xff657784, "巷"));
-    }
-
-    private static String cultureMeta(String title) {
-        if (title.contains("花会") || title.contains("庙会") || title.contains("药会")
-                || title.contains("文化节") || title.contains("年俗")) {
-            return "节庆风俗 · 提前核实时间";
+    private static List<Item> toItems(CityRepository.City city, String category,
+                                      CityContentData.Entry[] entries, int color, String mark) {
+        List<Item> result = new ArrayList<>();
+        for (int i = 0; i < entries.length; i++) {
+            CityContentData.Entry entry = entries[i];
+            result.add(item(city.code + "-" + category + "-" + (i + 1),
+                entry.title, entry.subtitle, entry.meta, color, mark));
         }
-        if (title.contains("技艺") || title.contains("戏") || title.contains("曲艺")
-                || title.contains("武术") || title.contains("魔术") || title.contains("杂技")
-                || title.contains("唢呐") || title.contains("铁花") || title.contains("泥泥狗")
-                || title.contains("泥咕咕") || title.contains("木版年画") || title.contains("烙画")) {
-            return "传统技艺 · 百度百科";
-        }
-        return "地市文化 · 尊重现场礼俗";
-    }
-
-    private static List<Item> cityScopedFood(CityRepository.City city) {
-        String id = city.code;
-        return Arrays.asList(
-            item(id + "-food-1", city.name + "特色小吃", "仅检索“" + city.officialName + "”范围内的代表小吃，联网后以本市结果替换。", "地市代码 " + id + " · 联网更新", 0xffc4633f, "味"),
-            item(id + "-food-2", city.name + "传统早点", "正在按城市全名从百度百科加载具体早餐条目，不套用同省其他城市内容。", "地市代码 " + id + " · 百度百科更新", 0xffb98942, "早"),
-            item(id + "-food-3", city.name + "地方菜", "查询本市地方菜、常见做法与食用场景，具体价格和营业状态到店确认。", "地市代码 " + id + " · 城市专属", 0xffd17a42, "菜"),
-            item(id + "-food-4", city.name + "时令风味", "询问本市当季食材、份量、做法和时价，确认店铺近期营业状态。", "地市代码 " + id + " · 明码问价", 0xff7c754d, "鲜"),
-            item(id + "-food-5", city.name + "老字号与街坊店", "按本市名称核实老字号认定、具体地址和经营主体，避免只依据自媒体榜单。", "地市代码 " + id + " · 多源确认", 0xffa96545, "店"));
-    }
-
-    private static List<Item> cityScopedCulture(CityRepository.City city) {
-        String id = city.code;
-        return Arrays.asList(
-            item(id + "-culture-1", city.name + "民俗风貌", "仅检索“" + city.officialName + "”民俗资料，联网后以本市公开结果补充。", "地市代码 " + id + " · 联网更新", 0xff537263, "俗"),
-            item(id + "-culture-2", city.name + "非遗项目", "正在从百度百科加载本市具体非遗条目、保护单位和传承信息。", "地市代码 " + id + " · 百度百科更新", 0xff8a5f76, "艺"),
-            item(id + "-culture-3", city.name + "节庆活动", "节庆名称与日期需查看本市公告，参与时尊重现场礼俗。", "地市代码 " + id + " · 提前确认", 0xffa45c4f, "节"),
-            item(id + "-culture-4", city.name + "传统技艺", "从本市博物馆、非遗馆或正规工坊查证材料、工序和传承信息。", "地市代码 " + id + " · 多源确认", 0xff765b82, "艺"),
-            item(id + "-culture-5", city.name + "老城生活", "通过本市地方馆藏、老街和日常社区了解城市沿革，不以商业化打卡内容替代民俗事实。", "地市代码 " + id + " · 文明参观", 0xff657784, "巷"));
-    }
-
-    static Place withCityDiscovery(Place base, CityContentService.Result online) {
-        List<Item> food = online.food.isEmpty() ? base.food : mergeOnline(online.food, base.food, 8);
-        List<Item> culture = online.culture.isEmpty() ? base.culture : mergeOnline(online.culture, base.culture, 8);
-        return new Place(base.city, base.province, base.lat, base.lon, base.intro,
-            food, culture, base.sights, base.tips, base.hotels);
+        return result;
     }
 
     static void validateCoverage(List<CityRepository.City> cities) {
@@ -294,32 +232,6 @@ final class LocalData {
         }
     }
 
-    private static List<Item> mergeOnline(List<Item> online, List<Item> local, int max) {
-        List<Item> result = new ArrayList<>(online);
-        for (Item item : local) addUnique(result, item, max);
-        return result;
-    }
-
-    static Place withOnline(Place base, DestinationService.Result online) {
-        List<Item> sights = new ArrayList<>();
-        for (Item item : online.sights) addUnique(sights, item, 18);
-        for (Item item : base.sights) addUnique(sights, item, 18);
-        List<Item> tips = new ArrayList<>(online.tips);
-        for (Item item : base.tips) if (tips.size() < 6) tips.add(item);
-        List<Item> hotels = new ArrayList<>(online.hotels);
-        for (Item item : base.hotels) if (hotels.size() < 8) hotels.add(item);
-        return new Place(base.city, base.province, base.lat, base.lon, base.intro,
-            base.food, base.culture, sights, tips, hotels);
-    }
-
-    static Place withScenicAreas(Place base, List<Item> scenicAreas) {
-        if (scenicAreas.isEmpty()) return base;
-        List<Item> sights = new ArrayList<>(scenicAreas);
-        for (Item item : base.sights) addUnique(sights, item, 18);
-        return new Place(base.city, base.province, base.lat, base.lon, base.intro,
-            base.food, base.culture, sights, base.tips, base.hotels);
-    }
-
     static Place withRankedHotels(Place base, CityRepository.City city, List<String> rankedNames) {
         if (rankedNames.isEmpty()) return base;
         List<Item> hotels = new ArrayList<>();
@@ -327,7 +239,7 @@ final class LocalData {
         for (String name : rankedNames) {
             addUnique(hotels, item(city.code + "-hotel-rank-" + rank, name,
                 "公开平台结果中的本地住宿候选。优先比较含税总价、近期住客评价、卫生、隔音、取消政策和到公共交通的真实步行距离。",
-                "美团/小红书等公开榜单索引 · 当前检索第" + rank + "位", 0xff536f78, "宿"), 5);
+                "美团/小红书公开榜单索引 · 当前检索第" + rank + "位", 0xff536f78, "宿"), 5);
             rank++;
         }
         for (Item item : base.hotels) addUnique(hotels, item, 10);
@@ -361,7 +273,7 @@ final class LocalData {
         List<Item> result = new ArrayList<>(curated);
         addUnique(result, item(city.code + "-food-more-1", profile.food1,
             "这类风味通常与当地物产和居民饮食习惯有关，建议从街坊常去的小店少量品尝。",
-            "地域风味 · 百度百科", 0xffc4633f, "味"), 6);
+            "地域风味 · 到店核实", 0xffc4633f, "味"), 6);
         addUnique(result, item(city.code + "-food-more-2", profile.food2,
             "不同街区和县区的做法、调味与配料会有差异，可比较两家以上再判断是否合口味。",
             "地方小吃 · 少量多尝", 0xffb98942, "食"), 6);
@@ -378,7 +290,7 @@ final class LocalData {
             "生活礼俗 · 尊重当地习惯", 0xff537263, "俗"), 6);
         addUnique(result, item(city.code + "-culture-more-2", profile.culture2,
             "可通过地方博物馆、非遗馆或正规演出了解其历史背景、技艺特点与传承现状。",
-            "传统文化 · 百度百科", 0xff8a5f76, "艺"), 6);
+            "传统文化 · 尊重礼俗", 0xff8a5f76, "艺"), 6);
         addUnique(result, item(city.code + "-culture-more-3", "地方节庆与市集",
             "节庆日期和活动范围可能临时调整，参加时遵守现场秩序并尊重居民与仪式空间。",
             "民俗活动 · 提前核实日期", 0xffa45c4f, "节"), 6);
@@ -415,46 +327,6 @@ final class LocalData {
         RegionProfile(String food1, String food2, String culture1, String culture2, String landscape) {
             this.food1 = food1; this.food2 = food2; this.culture1 = culture1; this.culture2 = culture2; this.landscape = landscape;
         }
-    }
-
-    private static final class CityProfile {
-        final String[] food;
-        final String[] culture;
-
-        CityProfile(String food1, String food2, String food3,
-                    String culture1, String culture2, String culture3) {
-            food = new String[]{food1, food2, food3};
-            culture = new String[]{culture1, culture2, culture3};
-        }
-    }
-
-    private static CityProfile cityProfile(String city, String province) {
-        if (!province.contains("河南")) return null;
-        switch (city) {
-            case "郑州": return cp("郑州烩面", "胡辣汤", "油馍头", "商都文化", "少林武术", "豫剧与曲艺");
-            case "开封": return cp("开封灌汤包", "桶子鸡", "炒凉粉", "汴京年俗", "盘鼓与大相国寺梵乐", "清明文化节");
-            case "洛阳": return cp("洛阳牛肉汤", "洛阳水席", "不翻汤", "河洛文化", "洛阳牡丹花会", "唐三彩烧制技艺");
-            case "平顶山": return cp("郏县饸饹面", "舞钢热豆腐", "鲁山揽锅菜", "马街书会", "宝丰魔术", "汝瓷烧制技艺");
-            case "安阳": return cp("道口烧鸡", "安阳扁粉菜", "皮渣", "殷商甲骨文化", "安阳抬阁", "滑县木版年画");
-            case "鹤壁": return cp("浚县子馍", "淇河缠丝鸭蛋", "黑芝麻糍馍", "浚县正月古庙会", "泥咕咕", "淇河诗经文化");
-            case "新乡": return cp("红焖羊肉", "获嘉饸饹条", "原阳烩面", "百泉药交会", "中州大鼓", "太行山村落文化");
-            case "焦作": return cp("博爱小车牛肉", "怀府闹汤驴肉", "武陟油茶", "太极拳", "怀药文化", "黄河河洛民俗");
-            case "濮阳": return cp("濮阳壮馍", "裹凉皮", "范县大包子", "龙文化", "东北庄杂技", "南乐目连戏");
-            case "许昌": return cp("许昌烩面", "丈地羊肉汤", "禹州十三碗", "钧瓷烧制技艺", "三国文化", "禹州药会");
-            case "漯河": return cp("北舞渡胡辣汤", "繁城牛肉", "漯河麻鸡", "许慎汉字文化", "沙澧河船工号子", "中原食品文化");
-            case "三门峡": return cp("灵宝羊肉汤", "陕州十碗席", "大营麻花", "陕州地坑院营造", "灵宝道情皮影", "仰韶彩陶文化");
-            case "南阳": return cp("南阳牛肉汤", "方城烩面", "唐河凉粉", "南阳烙画", "宛梆", "医圣文化");
-            case "商丘": return cp("水激馍", "垛子羊肉", "睢县烧鸡", "火神信俗", "豫东唢呐", "木兰传说");
-            case "信阳": return cp("信阳炖菜", "固始鹅块", "罗山大肠汤", "信阳毛尖茶俗", "豫南花鼓戏", "大别山红色文化");
-            case "周口": return cp("逍遥镇胡辣汤", "鹿邑试量狗肉", "沈丘顾家馍", "淮阳泥泥狗", "太昊陵庙会", "周口越调");
-            case "驻马店": return cp("确山凉粉", "汝南鸡肉丸子", "遂平桶子鸡", "梁祝传说", "确山铁花", "重阳文化");
-            default: return null;
-        }
-    }
-
-    private static CityProfile cp(String food1, String food2, String food3,
-                                  String culture1, String culture2, String culture3) {
-        return new CityProfile(food1, food2, food3, culture1, culture2, culture3);
     }
 
     private static RegionProfile profile(String province) {

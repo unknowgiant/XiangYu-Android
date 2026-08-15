@@ -41,7 +41,6 @@ final class FoodShopService {
 
     static void fetch(CityRepository.City cityValue, String food, Callback callback) {
         String city = cityValue.name;
-        String query = city + " " + food + " 探店";
         String key = city + ":" + food;
         synchronized (CACHE) {
             Result cached = CACHE.get(key);
@@ -52,11 +51,11 @@ final class FoodShopService {
             String xiaohongshu = xiaohongshuSearchUrl(city, food);
             Set<String> candidates = new LinkedHashSet<>();
             collectPlatform(meituan, city, food, candidates);
-            if (candidates.size() < 5) collectPlatform(xiaohongshu, city, food, candidates);
+            if (candidates.size() < 3) collectPlatform(xiaohongshu, city, food, candidates);
             List<String> shops = new ArrayList<>();
             for (String candidate : candidates) {
                 shops.add(candidate);
-                if (shops.size() >= 5) break;
+                if (shops.size() >= 3) break;
             }
             Result result = new Result(shops, meituan, xiaohongshu);
             synchronized (CACHE) {
@@ -70,13 +69,11 @@ final class FoodShopService {
     private static void collectPlatform(String endpoint, String city, String food, Set<String> result) {
         try {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
-            while (matcher.find() && result.size() < 10) {
+            while (matcher.find() && result.size() < 6) {
                 String title = clean(matcher.group(1));
                 if (!looksLikeShop(title)) continue;
                 if (title.contains("搜索") || title.contains("攻略") || title.contains("排行榜")
                         || title.contains("推荐") || title.contains("登录")) continue;
-                String foodKey = food.replace(city, "").trim();
-                if (!foodKey.isEmpty() && !title.contains(foodKey) && !looksLikeShop(title)) continue;
                 result.add(title);
             }
         } catch (Exception ignored) { }
@@ -88,11 +85,11 @@ final class FoodShopService {
             || value.contains("食府") || value.contains("小吃") || value.contains("记");
     }
 
-    private static String meituanSearchUrl(String city, String food) {
+    static String meituanSearchUrl(String city, String food) {
         return "https://www.meituan.com/s/" + encode(city + " " + food).replace("+", "%20") + "/";
     }
 
-    private static String xiaohongshuSearchUrl(String city, String food) {
+    static String xiaohongshuSearchUrl(String city, String food) {
         return "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " " + food + " 探店");
     }
 

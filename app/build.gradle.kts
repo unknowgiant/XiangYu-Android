@@ -10,8 +10,8 @@ android {
         applicationId = "cn.xiangyu.travelguide"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "1.8.7"
+        versionCode = 33
+        versionName = "1.8.9"
     }
 
     buildTypes {
