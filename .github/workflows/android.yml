@@ -34,6 +34,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
+      - name: Verify release permissions
+        run: |
+          APK="app/build/outputs/apk/release/app-release-unsigned.apk"
+          AAPT2="$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          PERMISSIONS="$($AAPT2 dump permissions "$APK")"
+          printf '%s\n' "$PERMISSIONS"
+          test "$(printf '%s\n' "$PERMISSIONS" | grep -c '^uses-permission:')" -eq 2
+          printf '%s\n' "$PERMISSIONS" | grep -q "android.permission.INTERNET"
+          printf '%s\n' "$PERMISSIONS" | grep -q "android.permission.ACCESS_COARSE_LOCATION"
+
       - name: Upload unsigned release artifact
         uses: actions/upload-artifact@v4
         with:
