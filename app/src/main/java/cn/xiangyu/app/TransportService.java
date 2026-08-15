@@ -146,7 +146,7 @@ final class TransportService {
                     String endpoint = "https://kyfw.12306.cn/otn/" + session.queryPath
                         + "?leftTicketDTO.train_date="
                         + encode(date) + "&leftTicketDTO.from_station=" + encode(fromCode)
-                        + "&leftTicketDTO.to_station=" + encode(toCode) + "&purpose_codes=ADULT";
+                        + "&leftTicketDTO.to_station=" + encode(toCode);
                     JSONObject root = new JSONObject(request(endpoint,
                         "https://kyfw.12306.cn/otn/leftTicket/init", session.cookie));
                     JSONObject data = root.optJSONObject("data");
