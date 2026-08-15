@@ -15,21 +15,25 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Reads only public Meituan and Xiaohongshu pages; no account or private API is used. */
+/** Uses official Amap POI first, with public platform pages only as fallback links. */
 final class FoodShopService {
     interface Callback { void onResult(Result result); }
 
     static final class Result {
         final List<String> shops;
         final Map<String, String> sources;
+        final String amapUrl;
         final String meituanUrl;
+        final String douyinUrl;
         final String xiaohongshuUrl;
 
-        Result(List<String> shops, Map<String, String> sources,
-               String meituanUrl, String xiaohongshuUrl) {
+        Result(List<String> shops, Map<String, String> sources, String amapUrl,
+               String meituanUrl, String douyinUrl, String xiaohongshuUrl) {
             this.shops = shops;
             this.sources = sources;
+            this.amapUrl = amapUrl;
             this.meituanUrl = meituanUrl;
+            this.douyinUrl = douyinUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
         }
 
@@ -52,9 +56,17 @@ final class FoodShopService {
         }
         EXECUTOR.execute(() -> {
             String meituan = meituanSearchUrl(city, food);
+            String douyin = douyinSearchUrl(city, food);
             String xiaohongshu = xiaohongshuSearchUrl(city, food);
+            String amap = AmapPoiService.searchUrl(city, food);
             Map<String, String> candidates = new LinkedHashMap<>();
-            collectPlatform(meituan, "美团", candidates);
+            for (AmapPoiService.Poi poi : AmapPoiService.search(
+                    cityValue, food, AmapPoiService.DINING_TYPES, 10)) {
+                candidates.putIfAbsent(poi.detail(false), "高德开放平台 POI");
+                if (candidates.size() >= 5) break;
+            }
+            if (candidates.size() < 5) collectPlatform(meituan, "美团补充", candidates);
+            if (candidates.size() < 5) collectPlatform(douyin, "抖音补充", candidates);
             if (candidates.size() < 5) collectPlatform(xiaohongshu, "小红书补充", candidates);
             List<String> shops = new ArrayList<>();
             Map<String, String> sources = new LinkedHashMap<>();
@@ -63,7 +75,7 @@ final class FoodShopService {
                 sources.put(candidate.getKey(), candidate.getValue());
                 if (shops.size() >= 5) break;
             }
-            Result result = new Result(shops, sources, meituan, xiaohongshu);
+            Result result = new Result(shops, sources, amap, meituan, douyin, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 60) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(key, result);
@@ -77,7 +89,8 @@ final class FoodShopService {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
             while (matcher.find() && result.size() < 12) {
                 String title = clean(matcher.group(1));
-                if (!looksLikeShop(title) || isUnsafe(title) || looksLikeEditorial(title)) continue;
+                if (!looksLikeShop(title) || !ContentSafety.isSafeTitle(title)
+                        || looksLikeEditorial(title)) continue;
                 result.putIfAbsent(title, source);
             }
         } catch (Exception ignored) { }
@@ -87,12 +100,6 @@ final class FoodShopService {
         return value.contains("店") || value.contains("馆") || value.contains("楼")
             || value.contains("餐厅") || value.contains("老号") || value.contains("老字号")
             || value.contains("食府") || value.contains("小吃") || value.contains("记");
-    }
-
-    private static boolean isUnsafe(String value) {
-        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
-            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
-            || value.contains("验证码") || value.contains("短信转发");
     }
 
     private static boolean looksLikeEditorial(String value) {
@@ -109,6 +116,11 @@ final class FoodShopService {
 
     static String xiaohongshuSearchUrl(String city, String food) {
         return "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " " + food + " 探店");
+    }
+
+    static String douyinSearchUrl(String city, String food) {
+        return "https://www.douyin.com/search/"
+            + encode(city + " " + food + " 探店").replace("+", "%20");
     }
 
     private static String request(String endpoint) throws Exception {
