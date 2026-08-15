@@ -7,8 +7,6 @@
         <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowShowWallpaper">false</item>
         <item name="android:backgroundDimEnabled">false</item>
-        <item name="android:windowSplashScreenBackground">#F8F6F1</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_png</item>
         <item name="android:navigationBarColor">#F8F6F1</item>
         <item name="android:statusBarColor">#F8F6F1</item>
         <item name="android:windowLightStatusBar">true</item>
