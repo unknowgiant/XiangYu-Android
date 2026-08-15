@@ -23,13 +23,15 @@ final class HotelRankService {
         final List<String> hotels;
         final Map<String, String> sources;
         final String meituanUrl;
+        final String douyinUrl;
         final String xiaohongshuUrl;
 
         Result(List<String> hotels, Map<String, String> sources,
-               String meituanUrl, String xiaohongshuUrl) {
+               String meituanUrl, String douyinUrl, String xiaohongshuUrl) {
             this.hotels = hotels;
             this.sources = sources;
             this.meituanUrl = meituanUrl;
+            this.douyinUrl = douyinUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
         }
 
@@ -50,9 +52,11 @@ final class HotelRankService {
         }
         EXECUTOR.execute(() -> {
             String meituan = meituanSearchUrl(city.name);
+            String douyin = douyinSearchUrl(city.name);
             String xiaohongshu = xiaohongshuSearchUrl(city.name);
             Map<String, String> candidates = new LinkedHashMap<>();
             collect(meituan, "美团", candidates);
+            if (candidates.size() < 5) collect(douyin, "抖音补充", candidates);
             if (candidates.size() < 5) collect(xiaohongshu, "小红书补充", candidates);
             List<String> hotels = new ArrayList<>();
             Map<String, String> sources = new LinkedHashMap<>();
@@ -62,7 +66,7 @@ final class HotelRankService {
                 sources.put(candidate.getKey(), candidate.getValue());
                 if (hotels.size() >= 5) break;
             }
-            Result result = new Result(hotels, sources, meituan, xiaohongshu);
+            Result result = new Result(hotels, sources, meituan, douyin, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 40) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(city.code, result);
@@ -76,7 +80,8 @@ final class HotelRankService {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
             while (matcher.find() && result.size() < 20) {
                 String title = clean(matcher.group(1));
-                if (!looksLikeHotel(title) || isUnsafe(title) || looksLikeEditorial(title)) continue;
+                if (!looksLikeHotel(title) || !ContentSafety.isSafeTitle(title)
+                        || looksLikeEditorial(title)) continue;
                 result.putIfAbsent(title, source);
             }
         } catch (Exception ignored) { }
@@ -95,12 +100,6 @@ final class HotelRankService {
             || value.contains("洲际") || value.contains("香格里拉") || value.contains("文华东方");
     }
 
-    private static boolean isUnsafe(String value) {
-        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
-            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
-            || value.contains("验证码") || value.contains("短信转发");
-    }
-
     private static boolean looksLikeEditorial(String value) {
         return value.contains("搜索") || value.contains("登录") || value.contains("攻略")
             || value.contains("排行榜") || value.contains("推荐") || value.contains("探店")
@@ -115,6 +114,11 @@ final class HotelRankService {
 
     static String xiaohongshuSearchUrl(String city) {
         return "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " 平价住宿 酒店");
+    }
+
+    static String douyinSearchUrl(String city) {
+        return "https://www.douyin.com/search/"
+            + encode(city + " 平价住宿 酒店").replace("+", "%20");
     }
 
     private static String request(String endpoint) throws Exception {

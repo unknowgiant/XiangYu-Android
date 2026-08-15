@@ -663,6 +663,7 @@ public class MainActivity extends Activity {
                 lastY = y; invalidate(); return true;
             }
             if (event.getAction() == MotionEvent.ACTION_UP && !dragging) {
+                performClick();
                 float x = event.getX();
                 if (y > getHeight() - dp(72)) {
                     int chosen = Math.min(2, (int) (x / (getWidth() / 3f)));
@@ -732,6 +733,11 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        @Override public boolean performClick() {
+            super.performClick();
+            return true;
+        }
+
         private void showItemMenu(LocalData.Item item) {
             boolean custom = userContent.isCustom(item.id);
             String[] actions = custom
@@ -765,7 +771,7 @@ public class MainActivity extends Activity {
             addDetailText(content, pickTitle, 15, RED, true);
             LinearLayout picks = new LinearLayout(getContext());
             picks.setOrientation(LinearLayout.VERTICAL);
-            addDetailText(picks, "正在从美团和小红书获取近期公开内容…", 13, MUTED, false);
+            addDetailText(picks, "正在获取近期公开内容…", 13, MUTED, false);
             content.addView(picks, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
             TextView nearby = null;
@@ -809,15 +815,16 @@ public class MainActivity extends Activity {
                     if (!dialog.isShowing()) return;
                     picks.removeAllViews();
                     if (result.shops.isEmpty()) {
-                        addDetailText(picks, "暂未提取到可靠店铺名，可通过下方美团和小红书入口查看当前城市结果。", 13, INK, false);
+                        addDetailText(picks, "平台搜索页采用动态加载或触发访问验证，本次未返回可核实店名。可通过下方入口查看实时结果。", 13, INK, false);
                     } else {
                         int index = 1;
                         for (String shop : result.shops) addDetailText(picks,
                             index++ + ". " + shop + "\n" + result.sourceOf(shop)
                                 + "公开结果 · 到店前核实", 13, INK, false);
                     }
-                    addDetailText(picks, "美团公开结果优先，最多展示 5 家；不足时由小红书公开页面补充。评分与营业状态会变化，不构成商业排名。", 12, MUTED, false);
+                    addDetailText(picks, "美团公开结果优先，抖音和小红书公开页补充，最多展示 5 家。应用不绕过平台验证，评分与营业状态请到店前核实。", 12, MUTED, false);
                     addSourceButton(picks, "查看美团公开检索结果", result.meituanUrl);
+                    addSourceButton(picks, "在抖音搜索当地探店", result.douyinUrl);
                     addSourceButton(picks, "在小红书搜索当地探店", result.xiaohongshuUrl);
                 }));
             } else if (category == 4) {
@@ -825,15 +832,16 @@ public class MainActivity extends Activity {
                     if (!dialog.isShowing()) return;
                     picks.removeAllViews();
                     if (result.hotels.isEmpty()) {
-                        addDetailText(picks, "暂未提取到可靠住宿名，可通过下方美团和小红书入口查看。", 13, INK, false);
+                        addDetailText(picks, "平台搜索页采用动态加载或触发访问验证，本次未返回可核实住宿名。可通过下方入口查看实时结果。", 13, INK, false);
                     } else {
                         int index = 1;
                         for (String hotel : result.hotels) addDetailText(picks,
                             index++ + ". " + hotel + "\n" + result.sourceOf(hotel)
                                 + "公开结果 · 平价住宿优先", 13, INK, false);
                     }
-                    addDetailText(picks, "美团公开结果优先，最多展示 5 家；已过滤名称中明确标注三星及以上或高端品牌的住宿。房价与空房请以预订页为准。", 12, MUTED, false);
+                    addDetailText(picks, "美团公开结果优先，抖音和小红书公开页补充，最多展示 5 家；明确三星及以上或高端品牌的住宿不进入前五。", 12, MUTED, false);
                     addSourceButton(picks, "查看美团住宿公开榜单", result.meituanUrl);
+                    addSourceButton(picks, "在抖音搜索平价住宿", result.douyinUrl);
                     addSourceButton(picks, "在小红书核对住宿体验", result.xiaohongshuUrl);
                 }));
             } else if (category == 3) {

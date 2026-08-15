@@ -161,7 +161,7 @@ final class TravelTipService {
             while (matcher.find() && result.size() < limit) {
                 String value = clean(matcher.group(1));
                 if (value.length() < 8 || value.contains("登录") || value.contains("搜索小红书")) continue;
-                if (isUnsafe(value)) continue;
+                if (!ContentSafety.isSafeTitle(value)) continue;
                 if (tipOnly && !containsTipWord(value)) continue;
                 result.add(limit(value, 140));
             }
@@ -182,12 +182,6 @@ final class TravelTipService {
             || value.contains("园中园") || value.contains("管理混乱") || value.contains("插队")
             || value.contains("停车") || value.contains("接驳") || value.contains("隐形消费")
             || value.contains("退订") || value.contains("投诉");
-    }
-
-    private static boolean isUnsafe(String value) {
-        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
-            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
-            || value.contains("验证码") || value.contains("短信转发");
     }
 
     private static String meituanSearchUrl(String city, String keyword) {

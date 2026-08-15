@@ -23,13 +23,15 @@ final class FoodShopService {
         final List<String> shops;
         final Map<String, String> sources;
         final String meituanUrl;
+        final String douyinUrl;
         final String xiaohongshuUrl;
 
         Result(List<String> shops, Map<String, String> sources,
-               String meituanUrl, String xiaohongshuUrl) {
+               String meituanUrl, String douyinUrl, String xiaohongshuUrl) {
             this.shops = shops;
             this.sources = sources;
             this.meituanUrl = meituanUrl;
+            this.douyinUrl = douyinUrl;
             this.xiaohongshuUrl = xiaohongshuUrl;
         }
 
@@ -52,9 +54,11 @@ final class FoodShopService {
         }
         EXECUTOR.execute(() -> {
             String meituan = meituanSearchUrl(city, food);
+            String douyin = douyinSearchUrl(city, food);
             String xiaohongshu = xiaohongshuSearchUrl(city, food);
             Map<String, String> candidates = new LinkedHashMap<>();
             collectPlatform(meituan, "美团", candidates);
+            if (candidates.size() < 5) collectPlatform(douyin, "抖音补充", candidates);
             if (candidates.size() < 5) collectPlatform(xiaohongshu, "小红书补充", candidates);
             List<String> shops = new ArrayList<>();
             Map<String, String> sources = new LinkedHashMap<>();
@@ -63,7 +67,7 @@ final class FoodShopService {
                 sources.put(candidate.getKey(), candidate.getValue());
                 if (shops.size() >= 5) break;
             }
-            Result result = new Result(shops, sources, meituan, xiaohongshu);
+            Result result = new Result(shops, sources, meituan, douyin, xiaohongshu);
             synchronized (CACHE) {
                 if (CACHE.size() >= 60) CACHE.remove(CACHE.keySet().iterator().next());
                 CACHE.put(key, result);
@@ -77,7 +81,8 @@ final class FoodShopService {
             Matcher matcher = PLATFORM_NAME.matcher(request(endpoint));
             while (matcher.find() && result.size() < 12) {
                 String title = clean(matcher.group(1));
-                if (!looksLikeShop(title) || isUnsafe(title) || looksLikeEditorial(title)) continue;
+                if (!looksLikeShop(title) || !ContentSafety.isSafeTitle(title)
+                        || looksLikeEditorial(title)) continue;
                 result.putIfAbsent(title, source);
             }
         } catch (Exception ignored) { }
@@ -87,12 +92,6 @@ final class FoodShopService {
         return value.contains("店") || value.contains("馆") || value.contains("楼")
             || value.contains("餐厅") || value.contains("老号") || value.contains("老字号")
             || value.contains("食府") || value.contains("小吃") || value.contains("记");
-    }
-
-    private static boolean isUnsafe(String value) {
-        return value.contains("成人") || value.contains("色情") || value.contains("赌博")
-            || value.contains("贷款") || value.contains("招嫖") || value.contains("约炮")
-            || value.contains("验证码") || value.contains("短信转发");
     }
 
     private static boolean looksLikeEditorial(String value) {
@@ -109,6 +108,11 @@ final class FoodShopService {
 
     static String xiaohongshuSearchUrl(String city, String food) {
         return "https://www.xiaohongshu.com/search_result?keyword=" + encode(city + " " + food + " 探店");
+    }
+
+    static String douyinSearchUrl(String city, String food) {
+        return "https://www.douyin.com/search/"
+            + encode(city + " " + food + " 探店").replace("+", "%20");
     }
 
     private static String request(String endpoint) throws Exception {
