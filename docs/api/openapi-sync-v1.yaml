@@ -1,0 +1,584 @@
+openapi: 3.1.0
+info:
+  title: XiangYu Account and Sync API
+  version: 0.1.0-draft
+  description: Draft contract for optional account login and private user-data synchronization.
+servers:
+  - url: https://api.example.cn/api/v1
+    description: Replace after the production domain is registered.
+tags:
+  - name: Auth
+  - name: Account
+  - name: Sync
+paths:
+  /auth/sms/send:
+    post:
+      tags: [Auth]
+      operationId: sendSmsCode
+      summary: Send a login verification code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsCodeRequest'
+      responses:
+        '202':
+          description: Request accepted whether or not an identity already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmsCodeResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/sms/verify:
+    post:
+      tags: [Auth]
+      operationId: verifySmsCode
+      summary: Verify a code and log in or register
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SmsVerifyRequest'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/token/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Rotate a refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken, deviceId]
+              properties:
+                refreshToken: { type: string, minLength: 32, maxLength: 2048 }
+                deviceId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Token pair rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Revoke the current device session
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Logged out }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      operationId: logoutAll
+      summary: Revoke all device sessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: All sessions revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me:
+    get:
+      tags: [Account]
+      operationId: getMe
+      summary: Get the current account
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [Account]
+      operationId: updateMe
+      summary: Update non-sensitive profile fields
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [displayName]
+              properties:
+                displayName: { type: string, minLength: 1, maxLength: 40 }
+      responses:
+        '200':
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [Account]
+      operationId: requestAccountDeletion
+      summary: Request account deletion after re-verification
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, code]
+              properties:
+                requestId: { type: string, format: uuid }
+                code: { type: string, pattern: '^[0-9]{4,8}$' }
+      responses:
+        '202':
+          description: Deletion scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleteAfter]
+                properties:
+                  deleteAfter: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/deletion-code:
+    post:
+      tags: [Account]
+      operationId: sendAccountDeletionCode
+      summary: Send a deletion confirmation code to the bound phone
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientRequestId]
+              properties:
+                clientRequestId: { type: string, format: uuid }
+                captchaToken: { type: [string, 'null'], maxLength: 2048 }
+      responses:
+        '202':
+          description: Deletion confirmation code requested
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SmsCodeResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me/cancel-deletion:
+    post:
+      tags: [Account]
+      operationId: cancelAccountDeletion
+      summary: Cancel a pending account deletion
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Deletion canceled }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/devices:
+    get:
+      tags: [Account]
+      operationId: listDevices
+      summary: List active device sessions
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Active devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeviceSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/devices/{deviceId}:
+    delete:
+      tags: [Account]
+      operationId: revokeDevice
+      summary: Revoke a device session
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Device revoked }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /me/export:
+    post:
+      tags: [Account]
+      operationId: requestDataExport
+      summary: Request an export of all private user data
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Export queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobId, status]
+                properties:
+                  jobId: { type: string, format: uuid }
+                  status: { type: string, enum: [QUEUED] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /me/export/{jobId}:
+    get:
+      tags: [Account]
+      operationId: getDataExport
+      summary: Get export status and a short-lived download URL
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Export job status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobId, status]
+                properties:
+                  jobId: { type: string, format: uuid }
+                  status: { type: string, enum: [QUEUED, PROCESSING, READY, EXPIRED, FAILED] }
+                  downloadUrl: { type: [string, 'null'], format: uri }
+                  expiresAt: { type: [string, 'null'], format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /sync:
+    post:
+      tags: [Sync]
+      operationId: synchronize
+      summary: Push local mutations and pull remote changes
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequest'
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413':
+          description: Request is too large
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /sync/bootstrap:
+    get:
+      tags: [Sync]
+      operationId: bootstrapSync
+      summary: Download a paged account snapshot on first login
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: [string, 'null'], maxLength: 2048 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 200 }
+      responses:
+        '200':
+          description: Snapshot page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangePage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Authentication required or expired
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    SmsCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [countryCode, phone, clientRequestId]
+      properties:
+        countryCode: { type: string, const: '+86' }
+        phone: { type: string, pattern: '^1[3-9][0-9]{9}$' }
+        clientRequestId: { type: string, format: uuid }
+        captchaToken: { type: [string, 'null'], maxLength: 2048 }
+    SmsCodeResponse:
+      type: object
+      required: [requestId, expiresIn, resendAfter]
+      properties:
+        requestId: { type: string, format: uuid }
+        expiresIn: { type: integer, minimum: 60, maximum: 600 }
+        resendAfter: { type: integer, minimum: 1, maximum: 600 }
+    SmsVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, code, device, acceptedTermsVersion, acceptedPrivacyVersion]
+      properties:
+        requestId: { type: string, format: uuid }
+        code: { type: string, pattern: '^[0-9]{4,8}$' }
+        device: { $ref: '#/components/schemas/DeviceInfo' }
+        acceptedTermsVersion: { type: string, maxLength: 40 }
+        acceptedPrivacyVersion: { type: string, maxLength: 40 }
+    DeviceInfo:
+      type: object
+      additionalProperties: false
+      required: [deviceId, platform, appVersion]
+      properties:
+        deviceId: { type: string, format: uuid }
+        name: { type: string, maxLength: 80 }
+        platform: { type: string, const: ANDROID }
+        appVersion: { type: string, maxLength: 30 }
+    TokenPair:
+      type: object
+      required: [accessToken, expiresIn, refreshToken, refreshExpiresIn, user]
+      properties:
+        accessToken: { type: string }
+        expiresIn: { type: integer, minimum: 60 }
+        refreshToken: { type: string }
+        refreshExpiresIn: { type: integer, minimum: 60 }
+        user: { $ref: '#/components/schemas/User' }
+    User:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [ACTIVE, PENDING_DELETE, DISABLED] }
+        displayName: { type: [string, 'null'], maxLength: 40 }
+        maskedPhone: { type: [string, 'null'], example: 138****1234 }
+        createdAt: { type: string, format: date-time }
+        deleteAfter: { type: [string, 'null'], format: date-time }
+    DeviceSession:
+      type: object
+      required: [deviceId, platform, createdAt, lastSeenAt, current]
+      properties:
+        deviceId: { type: string, format: uuid }
+        name: { type: [string, 'null'], maxLength: 80 }
+        platform: { type: string, enum: [ANDROID] }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        current: { type: boolean }
+    EntityType:
+      type: string
+      enum: [FAVORITE, NOTE, CUSTOM_ITEM, JOURNAL]
+    Operation:
+      type: string
+      enum: [UPSERT, DELETE]
+    SyncMutation:
+      type: object
+      additionalProperties: false
+      required: [mutationId, entityId, entityType, operation, baseVersion, clientUpdatedAt]
+      properties:
+        mutationId: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        entityType: { $ref: '#/components/schemas/EntityType' }
+        operation: { $ref: '#/components/schemas/Operation' }
+        baseVersion: { type: integer, format: int64, minimum: 0 }
+        clientUpdatedAt: { type: string, format: date-time }
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/FavoritePayload'
+            - $ref: '#/components/schemas/NotePayload'
+            - $ref: '#/components/schemas/CustomItemPayload'
+            - $ref: '#/components/schemas/JournalPayload'
+            - type: 'null'
+    SyncRequest:
+      type: object
+      additionalProperties: false
+      required: [deviceId, changes]
+      properties:
+        deviceId: { type: string, format: uuid }
+        cursor: { type: [string, 'null'], maxLength: 2048 }
+        changes:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/SyncMutation' }
+        limit: { type: integer, minimum: 1, maximum: 200, default: 200 }
+    SyncAck:
+      type: object
+      required: [mutationId, entityId, version]
+      properties:
+        mutationId: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        version: { type: integer, format: int64, minimum: 1 }
+    SyncConflict:
+      type: object
+      required: [mutationId, entityId, code, remote]
+      properties:
+        mutationId: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        code: { type: string, const: SYNC_CONFLICT }
+        remote: { $ref: '#/components/schemas/SyncEntity' }
+    SyncEntity:
+      type: object
+      required: [entityId, entityType, version, serverUpdatedAt, deleted]
+      properties:
+        entityId: { type: string, format: uuid }
+        entityType: { $ref: '#/components/schemas/EntityType' }
+        version: { type: integer, format: int64, minimum: 1 }
+        serverUpdatedAt: { type: string, format: date-time }
+        deleted: { type: boolean }
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/FavoritePayload'
+            - $ref: '#/components/schemas/NotePayload'
+            - $ref: '#/components/schemas/CustomItemPayload'
+            - $ref: '#/components/schemas/JournalPayload'
+            - type: 'null'
+    SyncResponse:
+      type: object
+      required: [serverTime, nextCursor, hasMore, accepted, conflicts, changes]
+      properties:
+        serverTime: { type: string, format: date-time }
+        nextCursor: { type: string, maxLength: 2048 }
+        hasMore: { type: boolean }
+        accepted:
+          type: array
+          items: { $ref: '#/components/schemas/SyncAck' }
+        conflicts:
+          type: array
+          items: { $ref: '#/components/schemas/SyncConflict' }
+        changes:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/SyncEntity' }
+    ChangePage:
+      type: object
+      required: [nextCursor, hasMore, changes]
+      properties:
+        nextCursor: { type: string, maxLength: 2048 }
+        hasMore: { type: boolean }
+        changes:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/SyncEntity' }
+    FavoritePayload:
+      type: object
+      additionalProperties: false
+      required: [subjectId, cityCode, category, titleSnapshot]
+      properties:
+        subjectId: { type: string, minLength: 1, maxLength: 160 }
+        cityCode: { type: string, minLength: 1, maxLength: 20 }
+        category: { type: integer, minimum: 0, maximum: 4 }
+        titleSnapshot: { type: string, minLength: 1, maxLength: 160 }
+        subtitleSnapshot: { type: string, maxLength: 2000 }
+        metaSnapshot: { type: string, maxLength: 500 }
+        color: { type: integer, format: int32 }
+        mark: { type: string, maxLength: 4 }
+    NotePayload:
+      type: object
+      additionalProperties: false
+      required: [subjectId, cityCode, category, titleSnapshot, content]
+      properties:
+        subjectId: { type: string, minLength: 1, maxLength: 160 }
+        cityCode: { type: string, minLength: 1, maxLength: 20 }
+        category: { type: integer, minimum: 0, maximum: 4 }
+        titleSnapshot: { type: string, minLength: 1, maxLength: 160 }
+        content: { type: string, minLength: 1, maxLength: 12000 }
+    CustomItemPayload:
+      type: object
+      additionalProperties: false
+      required: [cityCode, category, title, subtitle, meta]
+      properties:
+        legacyId: { type: [string, 'null'], maxLength: 160 }
+        cityCode: { type: string, minLength: 1, maxLength: 20 }
+        category: { type: integer, minimum: 0, maximum: 4 }
+        title: { type: string, minLength: 1, maxLength: 160 }
+        subtitle: { type: string, maxLength: 2000 }
+        meta: { type: string, maxLength: 500 }
+        color: { type: integer, format: int32 }
+        mark: { type: string, maxLength: 4 }
+        latitude: { type: [number, 'null'], minimum: -90, maximum: 90 }
+        longitude: { type: [number, 'null'], minimum: -180, maximum: 180 }
+    JournalPayload:
+      type: object
+      additionalProperties: false
+      required: [title, content]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 160 }
+        content: { type: string, minLength: 1, maxLength: 12000 }
+        travelDate: { type: [string, 'null'], format: date }
+        cityCode: { type: [string, 'null'], maxLength: 20 }
+        subjectIds:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 160 }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string, pattern: '^[A-Z0-9_]+$' }
+            message: { type: string, maxLength: 300 }
+            requestId: { type: string, maxLength: 80 }
+            retryAfterSeconds: { type: [integer, 'null'], minimum: 0 }
+            details: { type: object, additionalProperties: true }

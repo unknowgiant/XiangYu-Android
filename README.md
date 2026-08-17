@@ -8,6 +8,8 @@
 
 开发历程与架构：[查看从原型到 1.9.3 的详细总结](docs/DEVELOPMENT_HISTORY.md)
 
+账号与个人数据同步：[查看登录、收藏、笔记和旅行日志的服务端接口规划](docs/SERVER_SYNC_API_PLAN.md)
+
 隐私政策：[查看完整内容](https://unknowgiant.github.io/XiangYu-Android/privacy.html)
 
 ## 界面预览
