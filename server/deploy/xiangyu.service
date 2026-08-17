@@ -1,0 +1,35 @@
+[Unit]
+Description=XiangYu private data sync API
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=xiangyu
+Group=xiangyu
+WorkingDirectory=/opt/xiangyu/app
+EnvironmentFile=/etc/xiangyu/xiangyu.env
+ExecStart=/opt/temurin-17/bin/java -XX:MaxRAMPercentage=45 -XX:+ExitOnOutOfMemoryError -jar /opt/xiangyu/app/xiangyu-server.jar
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+SuccessExitStatus=143
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/log/xiangyu
+
+[Install]
+WantedBy=multi-user.target

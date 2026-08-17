@@ -1,0 +1,55 @@
+spring:
+  application:
+    name: xiangyu-server
+  datasource:
+    url: ${XIANGYU_DB_URL:jdbc:postgresql://127.0.0.1:5432/xiangyu}
+    username: ${XIANGYU_DB_USER:xiangyu_app}
+    password: ${XIANGYU_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${XIANGYU_DB_POOL_SIZE:6}
+      minimum-idle: 1
+      connection-timeout: 5000
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+  mvc:
+    problemdetails:
+      enabled: false
+
+server:
+  address: 127.0.0.1
+  port: ${XIANGYU_SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  max-http-request-header-size: 16KB
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+xiangyu:
+  security:
+    phone-encryption-key: ${XIANGYU_PHONE_ENCRYPTION_KEY:}
+    phone-hmac-key: ${XIANGYU_PHONE_HMAC_KEY:}
+    cursor-hmac-key: ${XIANGYU_CURSOR_HMAC_KEY:}
+    access-token-minutes: 15
+    refresh-token-days: 30
+  sms:
+    mode: ${XIANGYU_SMS_MODE:disabled}
+
+logging:
+  level:
+    root: INFO
+    cn.xiangyu.server: INFO
+    org.springframework.web: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ssXXX} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
