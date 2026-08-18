@@ -26,3 +26,8 @@ Thumbs.db
 *.apk
 *.aab
 *.zip
+
+# Server-only secrets and runtime data
+server/.env
+server/*.env
+server/runtime/
