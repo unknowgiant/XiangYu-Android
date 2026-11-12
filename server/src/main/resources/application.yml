@@ -37,6 +37,9 @@ management:
       show-details: never
 
 xiangyu:
+  community:
+    enabled: ${XIANGYU_COMMUNITY_ENABLED:false}
+    max-content-length: 2000
   security:
     phone-encryption-key: ${XIANGYU_PHONE_ENCRYPTION_KEY:}
     phone-hmac-key: ${XIANGYU_PHONE_HMAC_KEY:}

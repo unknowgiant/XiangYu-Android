@@ -250,12 +250,8 @@ final class LocalData {
     }
 
     static Place withTravelTips(Place base, List<Item> onlineTips) {
-        List<Item> tips = new ArrayList<>(onlineTips);
-        for (Item item : base.tips) {
-            boolean duplicate = false;
-            for (Item existing : tips) if (existing.title.equals(item.title)) duplicate = true;
-            if (!duplicate && tips.size() < 8) tips.add(item);
-        }
+        List<Item> tips = new ArrayList<>();
+        for (Item item : onlineTips) addUnique(tips, item, 18);
         return new Place(base.city, base.province, base.lat, base.lon, base.intro,
             base.food, base.culture, base.sights, tips, base.hotels);
     }

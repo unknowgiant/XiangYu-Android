@@ -1,7 +1,32 @@
 import java.util.Properties
+import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
     id("com.android.application")
+}
+
+// Use an isolated javac process to avoid Windows/JDK archive-lock errors when
+// the generated R.jar is closed after compilation.
+tasks.withType<JavaCompile>().configureEach {
+    options.isFork = true
+}
+
+val verifyCityContentData by tasks.registering {
+    val contentFile = layout.projectDirectory.file("src/main/java/cn/xiangyu/app/CityContentData.java")
+    inputs.file(contentFile)
+    doLast {
+        val content = contentFile.asFile.readText()
+        val rejectedMarkers = listOf("\"{}", "生殖器", "费尔班克斯", "州府\\t州和府")
+        rejectedMarkers.forEach { marker ->
+            check(!content.contains(marker)) {
+                "CityContentData contains rejected marker: $marker"
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(verifyCityContentData)
 }
 
 val localProperties = Properties().apply {
@@ -17,11 +42,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "cn.xiangyu.travelguide"
+        applicationId = "cn.xiangyu.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.9.3"
+        versionCode = 40
+        versionName = "1.9.6"
         buildConfigField("String", "AMAP_WEB_KEY", "\"$amapWebKey\"")
     }
 

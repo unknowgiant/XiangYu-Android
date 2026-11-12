@@ -31,3 +31,4 @@ Thumbs.db
 server/.env
 server/*.env
 server/runtime/
+/outputs/

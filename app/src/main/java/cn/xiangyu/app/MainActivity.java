@@ -836,7 +836,7 @@ public class MainActivity extends Activity {
             addDetailText(content, item.subtitle, 15, INK, false);
             addDetailText(content, item.meta, 12, MUTED, false);
             String pickTitle = category == 0 ? "附近好店" : category == 4 ? "平价住宿参考"
-                : category == 3 ? "近期避坑与出行提醒" : category == 1 ? "近期体验与分享" : "近期游玩攻略";
+                : category == 3 ? "近三个月当地旅行风险信息" : category == 1 ? "近期体验与分享" : "近期游玩攻略";
             addDetailText(content, pickTitle, 15, RED, true);
             LinearLayout picks = new LinearLayout(getContext());
             picks.setOrientation(LinearLayout.VERTICAL);
@@ -920,7 +920,7 @@ public class MainActivity extends Activity {
                     if (!dialog.isShowing()) return;
                     picks.removeAllViews();
                     if (result.summaries.isEmpty()) {
-                        addDetailText(picks, "暂未提取到可核实的公开线索，可通过下方入口按出租车、购物、门票、收费和现场管理继续核对。", 13, MUTED, false);
+                        addDetailText(picks, "近三个月未检索到同时符合本地、该风险类别和发布日期要求的头条公开资讯；不会用旧闻或外地内容填充。", 13, MUTED, false);
                     } else {
                         int index = 1;
                         for (String summary : result.summaries) {
@@ -928,7 +928,8 @@ public class MainActivity extends Activity {
                             addDetailText(picks, index++ + ". " + summary, 13, INK, false);
                         }
                     }
-                    addDetailText(picks, "公开笔记只作为风险线索，不代表问题目前仍存在；请结合文旅、市场监管、景区公告与现场信息交叉确认。", 12, MUTED, false);
+                    addDetailText(picks, "优先展示最近 90 天、标题明确包含当前城市的负面报道；不足时依次补充同期当地避坑经验和旅行提醒，并在来源后明确标注内容类型，每类最多 3 条。请结合文旅、市场监管和景区公告交叉确认。", 12, MUTED, false);
+                    addSourceButton(picks, "在今日头条查看相关报道", result.toutiaoUrl);
                     addSourceButton(picks, "在美团搜索当地点评", result.meituanUrl);
                     addSourceButton(picks, "在小红书搜索当地避坑", result.xiaohongshuUrl);
                 }));

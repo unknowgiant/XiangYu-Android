@@ -21,6 +21,10 @@
 - `XIANGYU_CURSOR_HMAC_KEY`
 - `XIANGYU_SMS_MODE`
 
+可选功能开关：
+
+- `XIANGYU_COMMUNITY_ENABLED=false`：留言板预留模块，默认且当前必须保持关闭。
+
 三个密钥均为独立的 32 字节随机值，以标准 Base64 编码。短信未完成供应商配置时，
 `XIANGYU_SMS_MODE=disabled`；此时发送验证码接口返回 `SMS_NOT_CONFIGURED`，不会使用固定
 验证码，也不会把验证码写入日志。
@@ -33,3 +37,11 @@
 - 同步写入使用实体版本和 mutation UUID，防止弱网重试重复写入。
 - 笔记和日志正文不写入应用日志。
 - PostgreSQL 不对公网开放，服务本身也不监听公网地址。
+
+## 数据库版本
+
+- `V1`：账号、身份、设备会话、验证码和个人数据同步。
+- `V2`：城市内容版本库，以及留言板帖子、举报和审核记录预留表。
+
+V2 不会自动导入或公开网络内容，也不会开放留言板写接口。数据库结构、默认关闭策略和正式开放前检查见
+`../docs/DATABASE_V2_AND_COMMUNITY_RESERVATION.md`。
